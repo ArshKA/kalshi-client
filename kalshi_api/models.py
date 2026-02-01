@@ -1,7 +1,10 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Generic, TypeVar
 from pydantic import BaseModel, ConfigDict
 from .enums import OrderStatus, Side, Action, OrderType
+
+# Type variable for generic pagination
+T = TypeVar("T")
 
 
 class MarketModel(BaseModel):
@@ -235,3 +238,21 @@ class OrderbookResponse(BaseModel):
             return None
         return max(p[0] for p in self.orderbook.no) if self.orderbook.no else None
 
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Generic paginated response for cursor-based pagination.
+    
+    Attributes:
+        items: List of items in the current page.
+        cursor: Cursor for the next page, or empty string if no more pages.
+    """
+
+    items: list[T]
+    cursor: str = ""
+
+    model_config = ConfigDict(extra="ignore")
+
+    @property
+    def has_more(self) -> bool:
+        """Returns True if there are more pages available."""
+        return bool(self.cursor)

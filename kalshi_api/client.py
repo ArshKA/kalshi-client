@@ -190,25 +190,91 @@ class KalshiClient:
         event_ticker: str | None = None,
         status: str = "open",
         limit: int = 100,
+        cursor: str | None = None,
+        fetch_all: bool = False,
     ) -> list[Market]:
         """
         Search for markets.
-        Returns list of Market objects.
+
+        Args:
+            series_ticker: Filter by series ticker.
+            event_ticker: Filter by event ticker.
+            status: Filter by market status (default: "open").
+            limit: Maximum results per page (default: 100, max: 1000).
+            cursor: Pagination cursor for fetching next page.
+            fetch_all: If True, automatically fetch all pages.
+
+        Returns:
+            List of Market objects.
+        """
+        all_markets: list[Market] = []
+        current_cursor = cursor
+
+        while True:
+            params = [f"status={status}", f"limit={limit}"]
+            if series_ticker:
+                params.append(f"series_ticker={series_ticker}")
+            if event_ticker:
+                params.append(f"event_ticker={event_ticker}")
+            if current_cursor:
+                params.append(f"cursor={current_cursor}")
+
+            endpoint = f"/markets?{'&'.join(params)}"
+            response = self.get(endpoint)
+            markets_data = response.get("markets", [])
+
+            markets = [Market(self, MarketModel.model_validate(m)) for m in markets_data]
+            all_markets.extend(markets)
+
+            # Check for next page
+            next_cursor = response.get("cursor", "")
+            if not fetch_all or not next_cursor:
+                break
+            current_cursor = next_cursor
+
+        return all_markets
+
+    def get_markets_paginated(
+        self,
+        series_ticker: str | None = None,
+        event_ticker: str | None = None,
+        status: str = "open",
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[Market], str]:
+        """
+        Search for markets with pagination info.
+
+        Args:
+            series_ticker: Filter by series ticker.
+            event_ticker: Filter by event ticker.
+            status: Filter by market status (default: "open").
+            limit: Maximum results per page (default: 100, max: 1000).
+            cursor: Pagination cursor for fetching next page.
+
+        Returns:
+            Tuple of (list of Market objects, next cursor string).
+            Empty cursor string indicates no more pages.
         """
         params = [f"status={status}", f"limit={limit}"]
         if series_ticker:
             params.append(f"series_ticker={series_ticker}")
         if event_ticker:
             params.append(f"event_ticker={event_ticker}")
+        if cursor:
+            params.append(f"cursor={cursor}")
 
         endpoint = f"/markets?{'&'.join(params)}"
         response = self.get(endpoint)
         markets_data = response.get("markets", [])
+        next_cursor = response.get("cursor", "")
 
-        return [Market(self, MarketModel.model_validate(m)) for m in markets_data]
+        markets = [Market(self, MarketModel.model_validate(m)) for m in markets_data]
+        return markets, next_cursor
 
     def get_user(self) -> User:
         """
         Get the authenticated User object.
         """
         return User(self)
+

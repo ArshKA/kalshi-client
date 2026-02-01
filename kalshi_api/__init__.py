@@ -16,6 +16,7 @@ from .models import (
     MarketModel,
     OrderbookResponse,
     CandlestickResponse,
+    PaginatedResponse,
 )
 
 # Set up logging to NullHandler by default to avoid "No handler found" warnings.
@@ -31,5 +32,5 @@ __all__ = [
     "MarketModel",
     "OrderbookResponse",
     "CandlestickResponse",
+    "PaginatedResponse",
 ]
-
