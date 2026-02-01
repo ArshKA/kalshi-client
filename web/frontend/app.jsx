@@ -275,7 +275,7 @@ const Orderbook = ({ ticker }) => {
                 {/* YES SIDE */}
                 <div className="border-r border-zinc-800 flex flex-col">
                     <div className="flex justify-between text-[10px] uppercase text-zinc-500 px-3 py-2 bg-zinc-900/50">
-                        <span>Bid (Buy Yes)</span>
+                        <span>Bid (Yes)</span>
                         <span>Qty</span>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
@@ -291,7 +291,7 @@ const Orderbook = ({ ticker }) => {
                 {/* NO SIDE */}
                 <div className="flex flex-col">
                     <div className="flex justify-between text-[10px] uppercase text-zinc-500 px-3 py-2 bg-zinc-900/50">
-                        <span>Bid (Buy No)</span>
+                        <span>Bid (No)</span>
                         <span>Qty</span>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
