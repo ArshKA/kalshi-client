@@ -548,6 +548,7 @@ const MarketTerminal = ({ ticker, onBack }) => {
     const [market, setMarket] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [balance, setBalance] = useState(null);
 
     useEffect(() => {
         // Fetch detailed market info
@@ -565,6 +566,12 @@ const MarketTerminal = ({ ticker, onBack }) => {
                 setError(err.message);
                 setLoading(false);
             });
+
+        // Fetch balance
+        fetch('/api/portfolio/balance')
+            .then(res => res.json())
+            .then(data => setBalance(data.balance))
+            .catch(console.error);
     }, [ticker]);
 
     if (loading) return (
@@ -675,7 +682,7 @@ const MarketTerminal = ({ ticker, onBack }) => {
                         </div>
                         <div className="flex justify-between items-center text-xs text-zinc-500 pt-2 border-t border-zinc-800">
                             <span>Wallet Balance</span>
-                            <span className="font-mono text-zinc-300">$0.00</span>
+                            <span className="font-mono text-zinc-300">{balance !== null ? formatDollar(balance) : '---'}</span>
                         </div>
                     </div>
                 </div>
