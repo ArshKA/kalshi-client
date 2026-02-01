@@ -11,14 +11,14 @@ class Order:
     Represents a Kalshi order.
     """
 
-    def __init__(self, client: KalshiClient, data: OrderModel):
+    def __init__(self, client: KalshiClient, data: OrderModel) -> None:
         self.client = client
         self.data = data
         self.order_id = data.order_id
         self.ticker = data.ticker
         self.status = data.status
 
-    def cancel(self):
+    def cancel(self) -> OrderModel:
         """Cancel this order."""
         if not self.order_id:
             raise ValueError("Order ID not found")

@@ -9,6 +9,7 @@ import time
 import json
 import logging
 from base64 import b64encode
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -55,7 +56,7 @@ class KalshiClient:
         private_key_path: str | None = None,
         api_base: str | None = None,
         demo: bool = False,
-    ):
+    ) -> None:
         """
         Initialize the Kalshi client.
 
@@ -107,7 +108,7 @@ class KalshiClient:
         )
         return timestamp, b64encode(signature).decode()
 
-    def _get_headers(self, method: str, endpoint: str) -> dict:
+    def _get_headers(self, method: str, endpoint: str) -> dict[str, str]:
         """Generate authenticated headers."""
         # IMPORTANT: Signature must NOT include query parameters
         # Use urlparse to cleanly extract just the path
@@ -121,7 +122,7 @@ class KalshiClient:
             "KALSHI-ACCESS-TIMESTAMP": timestamp,
         }
 
-    def _handle_response(self, response: requests.Response) -> dict:
+    def _handle_response(self, response: requests.Response) -> dict[str, Any]:
         """Handle API response and raise custom exceptions."""
         status_code = int(response.status_code or 500)
 
@@ -149,7 +150,7 @@ class KalshiClient:
         else:
             raise KalshiAPIError(status_code, message, code)
 
-    def get(self, endpoint: str) -> dict:
+    def get(self, endpoint: str) -> dict[str, Any]:
         """Make authenticated GET request."""
         url = f"{self.api_base}{endpoint}"
         logger.debug("GET %s", url)
@@ -157,7 +158,7 @@ class KalshiClient:
         response = requests.get(url, headers=headers)
         return self._handle_response(response)
 
-    def post(self, endpoint: str, data: dict) -> dict:
+    def post(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
         """Make authenticated POST request."""
         url = f"{self.api_base}{endpoint}"
         logger.debug("POST %s", url)
@@ -166,14 +167,14 @@ class KalshiClient:
         response = requests.post(url, headers=headers, data=body)
         return self._handle_response(response)
 
-    def delete(self, endpoint: str) -> dict:
+    def delete(self, endpoint: str) -> dict[str, Any]:
         """Make authenticated DELETE request."""
         url = f"{self.api_base}{endpoint}"
         headers = self._get_headers("DELETE", endpoint)
         response = requests.delete(url, headers=headers)
         return self._handle_response(response)
 
-    def get_market(self, ticker: str):
+    def get_market(self, ticker: str) -> Market:
         """
         Get a Market object by ticker.
         """
@@ -189,7 +190,7 @@ class KalshiClient:
         event_ticker: str | None = None,
         status: str = "open",
         limit: int = 100,
-    ):
+    ) -> list[Market]:
         """
         Search for markets.
         Returns list of Market objects.
@@ -206,7 +207,7 @@ class KalshiClient:
 
         return [Market(self, MarketModel.model_validate(m)) for m in markets_data]
 
-    def get_user(self):
+    def get_user(self) -> User:
         """
         Get the authenticated User object.
         """

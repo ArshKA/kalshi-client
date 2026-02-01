@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from .models import MarketModel, CandlestickResponse
 from .enums import CandlestickPeriod
 
@@ -12,7 +12,7 @@ class Market:
     Represents a Kalshi Market.
     """
 
-    def __init__(self, client: KalshiClient, data: MarketModel):
+    def __init__(self, client: KalshiClient, data: MarketModel) -> None:
         self.client = client
         self.data = data
         self.ticker = data.ticker
@@ -34,7 +34,7 @@ class Market:
         except Exception:
             return None
 
-    def get_orderbook(self) -> dict:
+    def get_orderbook(self) -> dict[str, Any]:
         """Get the orderbook for this market."""
         return self.client.get(f"/markets/{self.ticker}/orderbook")
 
@@ -62,5 +62,5 @@ class Market:
         response = self.client.get(endpoint)
         return CandlestickResponse.model_validate(response)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Market {self.ticker}>"
