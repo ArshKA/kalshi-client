@@ -19,7 +19,10 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.getcwd())
 
 from kalshi_api.client import KalshiClient
-from kalshi_api.models import MarketModel, OrderbookResponse, BalanceModel, EventModel
+from kalshi_api.models import (
+    MarketModel, OrderbookResponse, BalanceModel, EventModel, PositionModel, SettlementModel,
+    SubaccountBalanceModel, SubaccountTransferModel,
+)
 from kalshi_api.enums import MarketStatus, CandlestickPeriod
 from kalshi_api.exceptions import KalshiAPIError
 
@@ -177,6 +180,100 @@ def get_portfolio_balance():
     c = get_client()
     try:
         return c.portfolio.balance.model_dump()
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+@app.get("/api/portfolio/positions", response_model=List[PositionModel])
+def get_portfolio_positions():
+    """Get all portfolio positions with non-zero balances."""
+    c = get_client()
+    try:
+        positions = c.portfolio.get_positions(count_filter="position", fetch_all=True)
+        return [p.model_dump() for p in positions]
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+@app.get("/api/portfolio/settlements", response_model=List[SettlementModel])
+def get_portfolio_settlements(limit: int = 50):
+    """Get settlement history for resolved positions."""
+    c = get_client()
+    try:
+        settlements = c.portfolio.get_settlements(limit=limit)
+        return [s.model_dump() for s in settlements]
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+@app.get("/api/portfolio/summary")
+def get_portfolio_summary():
+    """Get portfolio summary: balance and position stats."""
+    c = get_client()
+    try:
+        balance = c.portfolio.balance
+        positions = c.portfolio.get_positions(count_filter="position", fetch_all=True)
+
+        # Calculate total position exposure
+        total_exposure = sum(abs(p.market_exposure or 0) for p in positions)
+
+        return {
+            "balance": balance.balance,
+            "portfolio_value": balance.portfolio_value,
+            "position_count": len(positions),
+            "total_exposure": total_exposure,
+        }
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+# --- Subaccounts ---
+
+@app.get("/api/portfolio/subaccounts/balances")
+def get_subaccount_balances():
+    """Get balances for all subaccounts."""
+    c = get_client()
+    try:
+        balances = c.portfolio.get_subaccount_balances()
+        return [b.model_dump() for b in balances]
+    except KalshiAPIError as e:
+        # 404 likely means subaccounts not enabled or none exist
+        if e.status_code == 404:
+            return []
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+@app.get("/api/portfolio/subaccounts/transfers")
+def get_subaccount_transfers(limit: int = 50):
+    """Get transfer history between subaccounts."""
+    c = get_client()
+    try:
+        transfers = c.portfolio.get_subaccount_transfers(limit=limit)
+        return [t.model_dump() for t in transfers]
+    except KalshiAPIError as e:
+        if e.status_code == 404:
+            return []
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+@app.post("/api/portfolio/subaccounts")
+def create_subaccount():
+    """Create a new subaccount."""
+    c = get_client()
+    try:
+        subaccount = c.portfolio.create_subaccount()
+        return subaccount.model_dump()
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+@app.post("/api/portfolio/subaccounts/transfer")
+def transfer_between_subaccounts(from_id: str, to_id: str, amount: int):
+    """Transfer funds between subaccounts."""
+    c = get_client()
+    try:
+        transfer = c.portfolio.transfer_between_subaccounts(from_id, to_id, amount)
+        return transfer.model_dump()
     except KalshiAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
