@@ -156,6 +156,34 @@ class TestSeriesObject:
         assert series.frequency == "daily"
         assert series.settlement_timer_seconds == 3600
 
+    def test_series_get_events(self, client, mock_response):
+        """Test fetching events for a series."""
+        client._session.request.side_effect = [
+            # First call: get series
+            mock_response({
+                "series": {"ticker": "INXD", "title": "S&P 500 Daily"}
+            }),
+            # Second call: get events
+            mock_response({
+                "events": [
+                    {"event_ticker": "INXD-24JAN01", "series_ticker": "INXD", "title": "S&P 500 Jan 1"},
+                    {"event_ticker": "INXD-24JAN02", "series_ticker": "INXD", "title": "S&P 500 Jan 2"},
+                ],
+                "cursor": "",
+            }),
+        ]
+
+        series = client.get_series("INXD")
+        events = series.get_events()
+
+        assert len(events) == 2
+        assert events[0].event_ticker == "INXD-24JAN01"
+        assert events[0].series_ticker == "INXD"
+
+        # Verify series_ticker filter was passed
+        call_url = client._session.request.call_args.args[1]
+        assert "series_ticker=INXD" in call_url
+
 
 class TestGetTrades:
     """Tests for public trade history."""

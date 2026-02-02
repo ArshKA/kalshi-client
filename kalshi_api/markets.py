@@ -8,6 +8,7 @@ from .enums import CandlestickPeriod, MarketStatus
 
 if TYPE_CHECKING:
     from .client import KalshiClient
+    from .events import Event
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,8 @@ class Market:
     """
 
     def __init__(self, client: KalshiClient, data: MarketModel) -> None:
-        self.client = client
+        self._client = client
         self.data = data
-        self._series_ticker_resolved = False
-        self._resolved_series_ticker: str | None = None
 
     # --- Typed properties for core fields ---
 
@@ -95,28 +94,36 @@ class Market:
     def result(self) -> str | None:
         return self.data.result
 
-    # --- Domain logic ---
-
     @property
     def series_ticker(self) -> str | None:
-        """Lazy-resolved series_ticker. Fetches from event API on first access if missing."""
+        """Series ticker if available in the market data."""
+        return self.data.series_ticker
+
+    def resolve_series_ticker(self) -> str | None:
+        """Fetch series_ticker from the event API if not present in market data.
+
+        Makes an API call to look up the series via the event. Use this when
+        you need the series_ticker but it wasn't included in the market response.
+
+        Returns:
+            The series ticker, or None if it couldn't be resolved.
+        """
         if self.data.series_ticker is not None:
             return self.data.series_ticker
-        if not self._series_ticker_resolved:
-            self._series_ticker_resolved = True
-            if self.data.event_ticker:
-                try:
-                    event_response = self.client.get(f"/events/{self.data.event_ticker}")
-                    self._resolved_series_ticker = event_response["event"]["series_ticker"]
-                except Exception as e:
-                    logger.warning(
-                        "Failed to resolve series_ticker for %s: %s", self.data.ticker, e
-                    )
-        return self._resolved_series_ticker
+        if not self.data.event_ticker:
+            return None
+        try:
+            event_response = self._client.get(f"/events/{self.data.event_ticker}")
+            return event_response["event"]["series_ticker"]
+        except Exception as e:
+            logger.warning(
+                "Failed to resolve series_ticker for %s: %s", self.data.ticker, e
+            )
+            return None
 
     def get_orderbook(self) -> OrderbookResponse:
         """Get the orderbook for this market."""
-        response = self.client.get(f"/markets/{self.data.ticker}/orderbook")
+        response = self._client.get(f"/markets/{self.data.ticker}/orderbook")
         return OrderbookResponse.model_validate(response)
 
     def get_candlesticks(
@@ -132,13 +139,50 @@ class Market:
             end_ts: End timestamp (Unix seconds).
             period: Candlestick period (ONE_MINUTE, ONE_HOUR, or ONE_DAY).
         """
-        if not self.series_ticker:
+        series = self.resolve_series_ticker()
+        if not series:
             raise ValueError(f"Market {self.data.ticker} does not have a series_ticker.")
 
         query = f"start_ts={start_ts}&end_ts={end_ts}&period_interval={period.value}"
-        endpoint = f"/series/{self.series_ticker}/markets/{self.data.ticker}/candlesticks?{query}"
-        response = self.client.get(endpoint)
+        endpoint = f"/series/{series}/markets/{self.data.ticker}/candlesticks?{query}"
+        response = self._client.get(endpoint)
         return CandlestickResponse.model_validate(response)
+
+    def get_trades(
+        self,
+        min_ts: int | None = None,
+        max_ts: int | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+        fetch_all: bool = False,
+    ) -> list[TradeModel]:
+        """Get public trade history for this market.
+
+        Args:
+            min_ts: Minimum timestamp (Unix seconds).
+            max_ts: Maximum timestamp (Unix seconds).
+            limit: Maximum trades per page (default 100).
+            cursor: Pagination cursor for fetching next page.
+            fetch_all: If True, automatically fetch all pages.
+        """
+        return self._client.get_trades(
+            ticker=self.ticker,
+            min_ts=min_ts,
+            max_ts=max_ts,
+            limit=limit,
+            cursor=cursor,
+            fetch_all=fetch_all,
+        )
+
+    def get_event(self) -> Event | None:
+        """Get the parent Event for this market.
+
+        Returns:
+            The Event object, or None if event_ticker is not set.
+        """
+        if not self.event_ticker:
+            return None
+        return self._client.get_event(self.event_ticker)
 
     def __getattr__(self, name: str):
         # Fallback for fields without explicit properties.
@@ -178,6 +222,10 @@ class Series:
     def get_markets(self, **kwargs) -> list[Market]:
         """Get all markets in this series."""
         return self._client.get_markets(series_ticker=self.ticker, **kwargs)
+
+    def get_events(self, **kwargs) -> list[Event]:
+        """Get all events in this series."""
+        return self._client.get_events(series_ticker=self.ticker, **kwargs)
 
     def __getattr__(self, name: str):
         return getattr(self.data, name)

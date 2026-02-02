@@ -17,12 +17,12 @@ class Portfolio:
     """Authenticated user's portfolio and trading operations."""
 
     def __init__(self, client: KalshiClient) -> None:
-        self.client = client
+        self._client = client
 
     @property
     def balance(self) -> BalanceModel:
         """Get portfolio balance. Values are in cents."""
-        data = self.client.get("/portfolio/balance")
+        data = self._client.get("/portfolio/balance")
         return BalanceModel.model_validate(data)
 
     def place_order(
@@ -100,9 +100,22 @@ class Portfolio:
         if order_group_id is not None:
             order_data["order_group_id"] = order_group_id
 
-        response = self.client.post("/portfolio/orders", order_data)
+        response = self._client.post("/portfolio/orders", order_data)
         model = OrderModel.model_validate(response["order"])
-        return Order(self.client, model)
+        return Order(self._client, model)
+
+    def cancel_order(self, order_id: str) -> Order:
+        """Cancel a resting order.
+
+        Args:
+            order_id: ID of the order to cancel.
+
+        Returns:
+            The canceled Order with updated status.
+        """
+        response = self._client.delete(f"/portfolio/orders/{order_id}")
+        model = OrderModel.model_validate(response["order"])
+        return Order(self._client, model)
 
     def amend_order(
         self,
@@ -135,9 +148,9 @@ class Portfolio:
         if not body:
             raise ValueError("Must specify at least one of count, yes_price, or no_price")
 
-        response = self.client.post(f"/portfolio/orders/{order_id}/amend", body)
+        response = self._client.post(f"/portfolio/orders/{order_id}/amend", body)
         model = OrderModel.model_validate(response["order"])
-        return Order(self.client, model)
+        return Order(self._client, model)
 
     def decrease_order(self, order_id: str, reduce_by: int) -> Order:
         """Decrease the remaining count of a resting order.
@@ -146,11 +159,11 @@ class Portfolio:
             order_id: ID of the order to decrease.
             reduce_by: Number of contracts to reduce by.
         """
-        response = self.client.post(
+        response = self._client.post(
             f"/portfolio/orders/{order_id}/decrease", {"reduce_by": reduce_by}
         )
         model = OrderModel.model_validate(response["order"])
-        return Order(self.client, model)
+        return Order(self._client, model)
 
     def get_orders(
         self,
@@ -175,14 +188,14 @@ class Portfolio:
             "ticker": ticker,
             "cursor": cursor,
         }
-        data = self.client.paginated_get("/portfolio/orders", "orders", params, fetch_all)
-        return [Order(self.client, OrderModel.model_validate(d)) for d in data]
+        data = self._client.paginated_get("/portfolio/orders", "orders", params, fetch_all)
+        return [Order(self._client, OrderModel.model_validate(d)) for d in data]
 
     def get_order(self, order_id: str) -> Order:
         """Get a single order by ID."""
-        response = self.client.get(f"/portfolio/orders/{order_id}")
+        response = self._client.get(f"/portfolio/orders/{order_id}")
         model = OrderModel.model_validate(response["order"])
-        return Order(self.client, model)
+        return Order(self._client, model)
 
     def get_positions(
         self,
@@ -211,7 +224,7 @@ class Portfolio:
             "count_filter": count_filter,
             "cursor": cursor,
         }
-        data = self.client.paginated_get("/portfolio/positions", "market_positions", params, fetch_all)
+        data = self._client.paginated_get("/portfolio/positions", "market_positions", params, fetch_all)
         return [PositionModel.model_validate(p) for p in data]
 
     def get_fills(
@@ -243,7 +256,7 @@ class Portfolio:
             "max_ts": max_ts,
             "cursor": cursor,
         }
-        data = self.client.paginated_get("/portfolio/fills", "fills", params, fetch_all)
+        data = self._client.paginated_get("/portfolio/fills", "fills", params, fetch_all)
         return [FillModel.model_validate(f) for f in data]
 
     # --- Batch Operations ---
@@ -265,8 +278,8 @@ class Portfolio:
             ]
             results = portfolio.batch_place_orders(orders)
         """
-        response = self.client.post("/portfolio/orders/batched", {"orders": orders})
-        return [Order(self.client, OrderModel.model_validate(o)) for o in response.get("orders", [])]
+        response = self._client.post("/portfolio/orders/batched", {"orders": orders})
+        return [Order(self._client, OrderModel.model_validate(o)) for o in response.get("orders", [])]
 
     def batch_cancel_orders(self, order_ids: list[str]) -> list[Order]:
         """Cancel multiple orders atomically.
@@ -277,11 +290,11 @@ class Portfolio:
         Returns:
             List of canceled Order objects.
         """
-        response = self.client.post(
+        response = self._client.post(
             "/portfolio/orders/batched/cancel",
             {"order_ids": order_ids}
         )
-        return [Order(self.client, OrderModel.model_validate(o)) for o in response.get("orders", [])]
+        return [Order(self._client, OrderModel.model_validate(o)) for o in response.get("orders", [])]
 
     # --- Queue Position ---
 
@@ -291,7 +304,7 @@ class Portfolio:
         Returns 0-indexed position in the queue at the order's price level.
         Position 0 means you're first in line to be filled.
         """
-        response = self.client.get(f"/portfolio/orders/{order_id}/queue_position")
+        response = self._client.get(f"/portfolio/orders/{order_id}/queue_position")
         return QueuePositionModel(
             order_id=order_id,
             queue_position=response.get("queue_position", 0)
@@ -306,7 +319,7 @@ class Portfolio:
         Returns:
             List of QueuePositionModel objects.
         """
-        response = self.client.post(
+        response = self._client.post(
             "/portfolio/orders/queue_positions",
             {"order_ids": order_ids}
         )
@@ -343,7 +356,7 @@ class Portfolio:
             "event_ticker": event_ticker,
             "cursor": cursor,
         }
-        data = self.client.paginated_get("/portfolio/settlements", "settlements", params, fetch_all)
+        data = self._client.paginated_get("/portfolio/settlements", "settlements", params, fetch_all)
         return [SettlementModel.model_validate(s) for s in data]
 
     def get_resting_order_value(self) -> int:
@@ -352,7 +365,7 @@ class Portfolio:
         NOTE: This endpoint is FCM-only (institutional accounts).
         Regular users will get a 404.
         """
-        response = self.client.get("/portfolio/summary/total_resting_order_value")
+        response = self._client.get("/portfolio/summary/total_resting_order_value")
         return response.get("total_resting_order_value", 0)
 
     # --- Order Groups (OCO, Bracket Orders) ---
@@ -383,22 +396,22 @@ class Portfolio:
         if max_loss is not None:
             body["max_loss"] = max_loss
 
-        response = self.client.post("/portfolio/order_groups", body)
+        response = self._client.post("/portfolio/order_groups", body)
         return OrderGroupModel.model_validate(response.get("order_group", response))
 
     def get_order_group(self, order_group_id: str) -> OrderGroupModel:
         """Get an order group by ID."""
-        response = self.client.get(f"/portfolio/order_groups/{order_group_id}")
+        response = self._client.get(f"/portfolio/order_groups/{order_group_id}")
         return OrderGroupModel.model_validate(response.get("order_group", response))
 
     def trigger_order_group(self, order_group_id: str) -> OrderGroupModel:
         """Manually trigger an order group."""
-        response = self.client.post(f"/portfolio/order_groups/{order_group_id}/trigger", {})
+        response = self._client.post(f"/portfolio/order_groups/{order_group_id}/trigger", {})
         return OrderGroupModel.model_validate(response.get("order_group", response))
 
     def delete_order_group(self, order_group_id: str) -> None:
         """Delete an order group (does not cancel the orders)."""
-        self.client.delete(f"/portfolio/order_groups/{order_group_id}")
+        self._client.delete(f"/portfolio/order_groups/{order_group_id}")
 
     def get_order_groups(
         self,
@@ -417,7 +430,7 @@ class Portfolio:
             List of OrderGroupModel objects.
         """
         params = {"limit": limit, "cursor": cursor}
-        data = self.client.paginated_get(
+        data = self._client.paginated_get(
             "/portfolio/order_groups", "order_groups", params, fetch_all
         )
         return [OrderGroupModel.model_validate(og) for og in data]
@@ -427,7 +440,7 @@ class Portfolio:
 
         Useful for reusing a bracket/OCO after partial fills.
         """
-        response = self.client.post(
+        response = self._client.post(
             f"/portfolio/order_groups/{order_group_id}/reset", {}
         )
         return OrderGroupModel.model_validate(response.get("order_group", response))
@@ -452,7 +465,7 @@ class Portfolio:
         if max_loss is not None:
             body["max_loss"] = max_loss
 
-        response = self.client.post(
+        response = self._client.post(
             f"/portfolio/order_groups/{order_group_id}/limit", body
         )
         return OrderGroupModel.model_validate(response.get("order_group", response))
@@ -468,7 +481,7 @@ class Portfolio:
         Returns:
             Created SubaccountModel with ID and number.
         """
-        response = self.client.post("/portfolio/subaccounts", {})
+        response = self._client.post("/portfolio/subaccounts", {})
         return SubaccountModel.model_validate(response.get("subaccount", response))
 
     def transfer_between_subaccounts(
@@ -492,7 +505,7 @@ class Portfolio:
             "to_subaccount_id": to_subaccount_id,
             "amount": amount,
         }
-        response = self.client.post("/portfolio/subaccounts/transfer", body)
+        response = self._client.post("/portfolio/subaccounts/transfer", body)
         return SubaccountTransferModel.model_validate(response.get("transfer", response))
 
     def get_subaccount_balances(self) -> list[SubaccountBalanceModel]:
@@ -501,7 +514,7 @@ class Portfolio:
         Returns:
             List of SubaccountBalanceModel with balance per subaccount.
         """
-        response = self.client.get("/portfolio/subaccounts/balances")
+        response = self._client.get("/portfolio/subaccounts/balances")
         return [
             SubaccountBalanceModel.model_validate(b)
             for b in response.get("balances", [])
@@ -524,7 +537,7 @@ class Portfolio:
             List of transfer records.
         """
         params = {"limit": limit, "cursor": cursor}
-        data = self.client.paginated_get(
+        data = self._client.paginated_get(
             "/portfolio/subaccounts/transfers", "transfers", params, fetch_all
         )
         return [SubaccountTransferModel.model_validate(t) for t in data]

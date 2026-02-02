@@ -187,11 +187,152 @@ class TestMarketCandlesticks:
         ]
 
         market = client.get_market("KXTEST-A")
+        # series_ticker property returns None (no lazy loading)
+        assert market.series_ticker is None
+        # But get_candlesticks still works by calling resolve_series_ticker()
         candles = market.get_candlesticks(start_ts=1, end_ts=2)
-
         assert candles.ticker == "KXTEST-A"
-        # Verify series was resolved
-        assert market.series_ticker == "KXSERIES"
+
+    def test_resolve_series_ticker_explicit(self, client, mock_response):
+        """Test resolve_series_ticker() makes explicit API call."""
+        client._session.request.side_effect = [
+            mock_response({
+                "market": {
+                    "ticker": "KXTEST-A",
+                    "series_ticker": None,
+                    "event_ticker": "KXTEST",
+                }
+            }),
+            mock_response({
+                "event": {
+                    "event_ticker": "KXTEST",
+                    "series_ticker": "KXSERIES",
+                }
+            }),
+        ]
+
+        market = client.get_market("KXTEST-A")
+        assert market.series_ticker is None
+        resolved = market.resolve_series_ticker()
+        assert resolved == "KXSERIES"
+
+    def test_resolve_series_ticker_returns_cached(self, client, mock_response):
+        """Test resolve_series_ticker() returns existing value without API call."""
+        client._session.request.return_value = mock_response({
+            "market": {
+                "ticker": "KXTEST-A",
+                "series_ticker": "EXISTING",
+            }
+        })
+
+        market = client.get_market("KXTEST-A")
+        assert market.series_ticker == "EXISTING"
+        resolved = market.resolve_series_ticker()
+        assert resolved == "EXISTING"
+        # Only one API call made (for get_market)
+        assert client._session.request.call_count == 1
+
+
+class TestMarketTrades:
+    """Tests for Market.get_trades() method."""
+
+    def test_market_get_trades(self, client, mock_response):
+        """Test fetching trades for a specific market."""
+        client._session.request.side_effect = [
+            # First call: get market
+            mock_response({
+                "market": {"ticker": "KXTEST-A", "title": "Test Market"}
+            }),
+            # Second call: get trades
+            mock_response({
+                "trades": [
+                    {
+                        "trade_id": "t-001",
+                        "ticker": "KXTEST-A",
+                        "count": 10,
+                        "yes_price": 55,
+                        "no_price": 45,
+                        "taker_side": "yes",
+                    },
+                    {
+                        "trade_id": "t-002",
+                        "ticker": "KXTEST-A",
+                        "count": 5,
+                        "yes_price": 56,
+                        "no_price": 44,
+                    },
+                ],
+                "cursor": "",
+            }),
+        ]
+
+        market = client.get_market("KXTEST-A")
+        trades = market.get_trades()
+
+        assert len(trades) == 2
+        assert trades[0].trade_id == "t-001"
+        assert trades[0].ticker == "KXTEST-A"
+
+        # Verify ticker filter was passed
+        call_url = client._session.request.call_args.args[1]
+        assert "ticker=KXTEST-A" in call_url
+
+    def test_market_get_trades_with_filters(self, client, mock_response):
+        """Test fetching trades with additional filters."""
+        client._session.request.side_effect = [
+            mock_response({"market": {"ticker": "KXTEST-A"}}),
+            mock_response({"trades": [], "cursor": ""}),
+        ]
+
+        market = client.get_market("KXTEST-A")
+        market.get_trades(min_ts=1704000000, max_ts=1704100000, limit=50)
+
+        call_url = client._session.request.call_args.args[1]
+        assert "ticker=KXTEST-A" in call_url
+        assert "min_ts=1704000000" in call_url
+        assert "max_ts=1704100000" in call_url
+        assert "limit=50" in call_url
+
+
+class TestMarketNavigation:
+    """Tests for Market navigation methods."""
+
+    def test_market_get_event(self, client, mock_response):
+        """Test fetching parent event for a market."""
+        client._session.request.side_effect = [
+            # First call: get market
+            mock_response({
+                "market": {"ticker": "KXTEST-A", "event_ticker": "KXTEST"}
+            }),
+            # Second call: get event
+            mock_response({
+                "event": {
+                    "event_ticker": "KXTEST",
+                    "series_ticker": "KXSERIES",
+                    "title": "Test Event",
+                }
+            }),
+        ]
+
+        market = client.get_market("KXTEST-A")
+        event = market.get_event()
+
+        assert event is not None
+        assert event.event_ticker == "KXTEST"
+        assert event.series_ticker == "KXSERIES"
+
+    def test_market_get_event_returns_none_when_no_event_ticker(self, client, mock_response):
+        """Test that get_event returns None when event_ticker is not set."""
+        client._session.request.return_value = mock_response({
+            "market": {"ticker": "ORPHAN", "event_ticker": None}
+        })
+
+        market = client.get_market("ORPHAN")
+        event = market.get_event()
+
+        assert event is None
+        # Only one API call made (for get_market)
+        assert client._session.request.call_count == 1
 
 
 class TestMarketObject:
@@ -325,6 +466,37 @@ class TestGetEvents:
 
         assert len(events) == 2
         assert client._session.request.call_count == 2
+
+
+class TestEventNavigation:
+    """Tests for Event navigation methods."""
+
+    def test_event_get_series(self, client, mock_response):
+        """Test fetching parent series for an event."""
+        client._session.request.side_effect = [
+            # First call: get event
+            mock_response({
+                "event": {
+                    "event_ticker": "KXTEST",
+                    "series_ticker": "KXSERIES",
+                    "title": "Test Event",
+                }
+            }),
+            # Second call: get series
+            mock_response({
+                "series": {
+                    "ticker": "KXSERIES",
+                    "title": "Test Series",
+                    "category": "politics",
+                }
+            }),
+        ]
+
+        event = client.get_event("KXTEST")
+        series = event.get_series()
+
+        assert series.ticker == "KXSERIES"
+        assert series.title == "Test Series"
 
 
 class TestMarketStatus:

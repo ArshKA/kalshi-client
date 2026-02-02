@@ -4,7 +4,7 @@ from .models import EventModel
 
 if TYPE_CHECKING:
     from .client import KalshiClient
-    from .markets import Market
+    from .markets import Market, Series
 
 
 class Event:
@@ -18,7 +18,7 @@ class Event:
     """
 
     def __init__(self, client: KalshiClient, data: EventModel) -> None:
-        self.client = client
+        self._client = client
         self.data = data
 
     # --- Typed properties for core fields ---
@@ -47,7 +47,11 @@ class Event:
 
     def get_markets(self) -> list[Market]:
         """Get all markets for this event."""
-        return self.client.get_markets(event_ticker=self.data.event_ticker)
+        return self._client.get_markets(event_ticker=self.data.event_ticker)
+
+    def get_series(self) -> Series:
+        """Get the parent Series for this event."""
+        return self._client.get_series(self.series_ticker)
 
     def __getattr__(self, name: str):
         return getattr(self.data, name)

@@ -15,7 +15,7 @@ class Order:
     """
 
     def __init__(self, client: KalshiClient, data: OrderModel) -> None:
-        self.client = client
+        self._client = client
         self.data = data
 
     # --- Typed properties for core fields ---
@@ -71,9 +71,62 @@ class Order:
     # --- Domain logic ---
 
     def cancel(self) -> Order:
-        """Cancel this order. Returns self with updated data."""
-        response = self.client.delete(f"/portfolio/orders/{self.data.order_id}")
-        self.data = OrderModel.model_validate(response["order"])
+        """Cancel this order.
+
+        Returns:
+            Self with updated data (status will be CANCELED).
+        """
+        updated = self._client.portfolio.cancel_order(self.order_id)
+        self.data = updated.data
+        return self
+
+    def amend(
+        self,
+        *,
+        count: int | None = None,
+        yes_price: int | None = None,
+        no_price: int | None = None,
+    ) -> Order:
+        """Amend this order's price or count.
+
+        Args:
+            count: New total contract count.
+            yes_price: New YES price in cents.
+            no_price: New NO price in cents (converted to yes_price internally).
+
+        Returns:
+            Self with updated data.
+        """
+        updated = self._client.portfolio.amend_order(
+            self.order_id,
+            count=count,
+            yes_price=yes_price,
+            no_price=no_price,
+        )
+        self.data = updated.data
+        return self
+
+    def decrease(self, reduce_by: int) -> Order:
+        """Decrease the remaining count of this order.
+
+        Args:
+            reduce_by: Number of contracts to reduce by.
+
+        Returns:
+            Self with updated data.
+        """
+        updated = self._client.portfolio.decrease_order(self.order_id, reduce_by)
+        self.data = updated.data
+        return self
+
+    def refresh(self) -> Order:
+        """Re-fetch this order's current state from the API.
+
+        Returns:
+            Self with updated data.
+        """
+        updated = self._client.portfolio.get_order(self.order_id)
+        self.data = updated.data
         return self
 
     def __getattr__(self, name: str):
