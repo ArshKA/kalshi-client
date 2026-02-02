@@ -42,6 +42,11 @@ const App = () => {
         <div className="text-zinc-200 font-sans selection:bg-kalshi-green/30 bg-[#0e0e10] min-h-screen">
             {params.page === 'status' ? (
                 <StatusPage onBack={() => navigate({})} />
+            ) : params.page === 'portfolio' ? (
+                <PortfolioPage
+                    onBack={() => navigate({})}
+                    onSelectMarket={(ticker) => navigate({ ticker })}
+                />
             ) : params.ticker ? (
                 <MarketTerminal
                     ticker={params.ticker}

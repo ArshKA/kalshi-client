@@ -12,6 +12,20 @@ const Orderbook = ({ book, connected }) => {
     const topYesBids = [...yesLevels].sort((a, b) => b[0] - a[0]);
     const topNoBids = [...noLevels].sort((a, b) => b[0] - a[0]);
 
+    // Calculate analytics
+    const bestYesBid = topYesBids.length > 0 ? topYesBids[0][0] : null;
+    const bestNoBid = topNoBids.length > 0 ? topNoBids[0][0] : null;
+    const bestYesAsk = bestNoBid !== null ? 100 - bestNoBid : null;
+
+    const spread = (bestYesBid !== null && bestYesAsk !== null) ? bestYesAsk - bestYesBid : null;
+    const mid = (bestYesBid !== null && bestYesAsk !== null) ? (bestYesBid + bestYesAsk) / 2 : null;
+
+    // Imbalance: (yes_depth - no_depth) / total
+    const yesDepth = yesLevels.reduce((sum, [_, qty]) => sum + qty, 0);
+    const noDepth = noLevels.reduce((sum, [_, qty]) => sum + qty, 0);
+    const totalDepth = yesDepth + noDepth;
+    const imbalance = totalDepth > 0 ? (yesDepth - noDepth) / totalDepth : 0;
+
     return (
         <div className="flex flex-col h-full bg-[#111113] rounded-lg border border-zinc-800 overflow-hidden shadow-xl">
             <div className="px-4 py-3 border-b border-zinc-800 flex justify-between items-center bg-[#131316]">
@@ -30,6 +44,24 @@ const Orderbook = ({ book, connected }) => {
                     <div className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-kalshi-red"></span>
                         <span className="text-[10px] text-zinc-500">NO</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Analytics Row */}
+            <div className="grid grid-cols-3 gap-2 px-3 py-2 border-b border-zinc-800 bg-zinc-900/30">
+                <div className="text-center">
+                    <div className="text-[9px] text-zinc-500 uppercase">Mid</div>
+                    <div className="font-mono text-sm text-white">{mid !== null ? `${mid.toFixed(1)}¢` : '—'}</div>
+                </div>
+                <div className="text-center">
+                    <div className="text-[9px] text-zinc-500 uppercase">Spread</div>
+                    <div className="font-mono text-sm text-white">{spread !== null ? `${spread}¢` : '—'}</div>
+                </div>
+                <div className="text-center">
+                    <div className="text-[9px] text-zinc-500 uppercase">Imbalance</div>
+                    <div className={`font-mono text-sm ${imbalance > 0.1 ? 'text-green-400' : imbalance < -0.1 ? 'text-red-400' : 'text-zinc-400'}`}>
+                        {totalDepth > 0 ? `${(imbalance * 100).toFixed(0)}%` : '—'}
                     </div>
                 </div>
             </div>

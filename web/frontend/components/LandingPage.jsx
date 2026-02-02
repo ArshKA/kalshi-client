@@ -29,12 +29,20 @@ const LandingPage = ({ onSearch, onNavigate }) => {
 
     return (
         <div className="min-h-screen bg-[#0e0e10] flex flex-col items-center justify-center p-4 relative">
-            <button
-                onClick={() => onNavigate && onNavigate('status')}
-                className="absolute top-4 right-4 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
-            >
-                Status
-            </button>
+            <div className="absolute top-4 right-4 flex gap-4">
+                <button
+                    onClick={() => onNavigate && onNavigate('portfolio')}
+                    className="text-xs text-zinc-600 hover:text-kalshi-green transition-colors"
+                >
+                    Portfolio
+                </button>
+                <button
+                    onClick={() => onNavigate && onNavigate('status')}
+                    className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                    Status
+                </button>
+            </div>
             <div className="w-full max-w-md text-center">
                 <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">Kalshi Terminal</h1>
                 <p className="text-zinc-500 mb-8">Direct Market Access & Analytics</p>

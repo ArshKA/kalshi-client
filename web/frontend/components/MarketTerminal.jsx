@@ -9,7 +9,6 @@ const MarketTerminal = ({ ticker, onBack }) => {
     const [market, setMarket] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [balance, setBalance] = useState(null);
 
     // Real-time data from WebSocket
     const { orderbook, connected: wsConnected, liveData } = useMarketFeed(ticker);
@@ -30,11 +29,6 @@ const MarketTerminal = ({ ticker, onBack }) => {
                 setError(err.message);
                 setLoading(false);
             });
-
-        fetch('/api/portfolio/balance')
-            .then(res => res.json())
-            .then(data => setBalance(data.balance))
-            .catch(console.error);
     }, [ticker]);
 
     // Use live values if available, otherwise fall back to initial market data
@@ -153,7 +147,7 @@ const MarketTerminal = ({ ticker, onBack }) => {
 
                     {/* Trade Panel */}
                     <div className="bg-[#131316] p-6 rounded-xl border border-zinc-800 shadow-xl">
-                        <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <button className="flex flex-col items-center justify-center bg-green-900/10 border border-green-500/20 text-green-400 font-bold py-4 rounded-lg hover:bg-green-500 hover:text-black hover:scale-[1.02] transition-all group">
                                 <span className="text-[10px] uppercase opacity-60 mb-1 group-hover:text-black/70">Buy Yes</span>
                                 <span className="text-2xl tracking-tight">{formatPrice(displayYesAsk)}</span>
@@ -162,10 +156,6 @@ const MarketTerminal = ({ ticker, onBack }) => {
                                 <span className="text-[10px] uppercase opacity-60 mb-1 group-hover:text-black/70">Buy No</span>
                                 <span className="text-2xl tracking-tight">{formatPrice(displayNoBid)}</span>
                             </button>
-                        </div>
-                        <div className="flex justify-between items-center text-xs text-zinc-500 pt-2 border-t border-zinc-800">
-                            <span>Wallet Balance</span>
-                            <span className="font-mono text-zinc-300">{balance !== null ? formatDollar(balance) : '---'}</span>
                         </div>
                     </div>
                 </div>
