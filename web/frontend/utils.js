@@ -1,3 +1,6 @@
+// Destructure React hooks for use in all components
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
 const formatPrice = (cents) => {
     if (cents === null || cents === undefined) return '-';
     return `${cents}¢`;

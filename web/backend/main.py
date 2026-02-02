@@ -24,7 +24,12 @@ from kalshi_api.models import (
     SubaccountBalanceModel, SubaccountTransferModel,
 )
 from kalshi_api.enums import MarketStatus, CandlestickPeriod
-from kalshi_api.exceptions import KalshiAPIError
+from kalshi_api.exceptions import (
+    KalshiAPIError,
+    AuthenticationError,
+    ResourceNotFoundError,
+    RateLimitError,
+)
 
 load_dotenv()
 
@@ -53,6 +58,53 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --- Exception Handlers ---
+# Convert Kalshi API errors to proper HTTP responses with rich context
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(KalshiAPIError)
+async def kalshi_api_error_handler(request: Request, exc: KalshiAPIError):
+    """Convert KalshiAPIError to a JSON response with full context."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.message,
+            "error_code": exc.error_code,
+            "endpoint": exc.endpoint,
+            "method": exc.method,
+            # Don't expose request_body in production - may contain sensitive data
+        },
+    )
+
+
+@app.exception_handler(AuthenticationError)
+async def auth_error_handler(request: Request, exc: AuthenticationError):
+    """Handle authentication errors."""
+    return JSONResponse(
+        status_code=401,
+        content={
+            "error": "Authentication failed. Check your API credentials.",
+            "error_code": exc.error_code,
+        },
+    )
+
+
+@app.exception_handler(RateLimitError)
+async def rate_limit_error_handler(request: Request, exc: RateLimitError):
+    """Handle rate limit errors."""
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "Rate limit exceeded. Please slow down requests.",
+            "error_code": "rate_limited",
+        },
+    )
+
 
 client: Optional[KalshiClient] = None
 
@@ -217,12 +269,131 @@ def get_portfolio_summary():
         # Calculate total position exposure
         total_exposure = sum(abs(p.market_exposure or 0) for p in positions)
 
+        # Calculate unrealized P&L by fetching current market prices
+        unrealized_pnl = 0
+        position_market_value = 0
+        for pos in positions:
+            if pos.position == 0:
+                continue
+            try:
+                market = c.get_market(pos.ticker)
+                market_data = market.data
+
+                # Get mid price (or last price as fallback)
+                yes_bid = market_data.yes_bid or 0
+                yes_ask = market_data.yes_ask or 0
+                if yes_bid and yes_ask:
+                    mid_price = (yes_bid + yes_ask) / 2
+                else:
+                    mid_price = market_data.last_price or 50
+
+                # Calculate position value at current price
+                if pos.position > 0:
+                    # Long YES: value = contracts * yes_price
+                    current_value = pos.position * mid_price
+                else:
+                    # Long NO (negative position): value = contracts * (100 - yes_price)
+                    current_value = abs(pos.position) * (100 - mid_price)
+
+                position_market_value += current_value
+
+                # Unrealized = current_value - cost_basis
+                # market_exposure is typically what you paid (cost basis)
+                cost_basis = abs(pos.market_exposure or 0)
+                unrealized_pnl += current_value - cost_basis
+            except Exception:
+                # If we can't fetch market data, skip this position
+                pass
+
         return {
             "balance": balance.balance,
             "portfolio_value": balance.portfolio_value,
             "position_count": len(positions),
             "total_exposure": total_exposure,
+            "position_market_value": int(position_market_value),
+            "unrealized_pnl": int(unrealized_pnl),
         }
+    except KalshiAPIError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+
+
+@app.get("/api/portfolio/history")
+def get_portfolio_history(days: int = 30, resolution: Optional[str] = None):
+    """Get portfolio realized P&L history for charting.
+
+    Calculates P&L timeline from settlements only (realized P&L).
+    Fills don't represent P&L - they're cash exchanges for positions.
+
+    Args:
+        days: Number of days of history (default 30).
+        resolution: Optional resampling - 'minute', 'hour', or 'day'.
+    """
+    c = get_client()
+    try:
+        from datetime import datetime
+
+        now = int(time.time())
+        min_ts = now - (days * 86400)
+
+        events = []
+
+        # Get settlements - these are the only true realized P&L events
+        settlements = c.portfolio.get_settlements(fetch_all=True)
+        for settlement in settlements:
+            ts = None
+            if settlement.settled_time:
+                try:
+                    dt = datetime.fromisoformat(settlement.settled_time.replace('Z', '+00:00'))
+                    ts = int(dt.timestamp())
+                except Exception:
+                    pass
+            if not ts or ts < min_ts:
+                continue
+
+            # Settlement P&L = revenue - costs - fees
+            fee_cents = int(float(settlement.fee_cost or 0) * 100)
+            delta = settlement.revenue - settlement.yes_total_cost - settlement.no_total_cost - fee_cents
+            events.append({'ts': ts, 'delta': delta, 'type': 'settlement'})
+
+        if not events:
+            return []
+
+        # Sort by timestamp
+        events.sort(key=lambda e: e['ts'])
+
+        # Calculate cumulative P&L
+        cumulative = 0
+        for e in events:
+            cumulative += e['delta']
+            e['pnl'] = cumulative
+
+        # Resample if requested
+        if resolution and len(events) > 1:
+            period_seconds = {
+                'minute': 60,
+                'hour': 3600,
+                'day': 86400,
+            }.get(resolution, 3600)
+
+            # Create time buckets
+            start_ts = (events[0]['ts'] // period_seconds) * period_seconds
+            end_ts = now
+            resampled = []
+
+            event_idx = 0
+            current_pnl = 0
+
+            for bucket_ts in range(start_ts, end_ts + period_seconds, period_seconds):
+                # Advance through events up to this bucket
+                while event_idx < len(events) and events[event_idx]['ts'] <= bucket_ts:
+                    current_pnl = events[event_idx]['pnl']
+                    event_idx += 1
+                resampled.append({'ts': bucket_ts, 'pnl': current_pnl, 'type': 'resampled'})
+
+            return resampled
+
+        return [{'ts': e['ts'], 'pnl': e['pnl'], 'type': e['type']} for e in events]
+
     except KalshiAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
 

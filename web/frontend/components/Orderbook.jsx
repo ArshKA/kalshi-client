@@ -12,17 +12,21 @@ const Orderbook = ({ book, connected }) => {
     const topYesBids = [...yesLevels].sort((a, b) => b[0] - a[0]);
     const topNoBids = [...noLevels].sort((a, b) => b[0] - a[0]);
 
-    // Calculate analytics
-    const bestYesBid = topYesBids.length > 0 ? topYesBids[0][0] : null;
-    const bestNoBid = topNoBids.length > 0 ? topNoBids[0][0] : null;
+    // Filter out 0-quantity levels for analytics only (they're pending removal)
+    const activeYesBids = topYesBids.filter(([_, qty]) => qty > 0);
+    const activeNoBids = topNoBids.filter(([_, qty]) => qty > 0);
+
+    // Calculate analytics from active levels only
+    const bestYesBid = activeYesBids.length > 0 ? activeYesBids[0][0] : null;
+    const bestNoBid = activeNoBids.length > 0 ? activeNoBids[0][0] : null;
     const bestYesAsk = bestNoBid !== null ? 100 - bestNoBid : null;
 
     const spread = (bestYesBid !== null && bestYesAsk !== null) ? bestYesAsk - bestYesBid : null;
     const mid = (bestYesBid !== null && bestYesAsk !== null) ? (bestYesBid + bestYesAsk) / 2 : null;
 
-    // Imbalance: (yes_depth - no_depth) / total
-    const yesDepth = yesLevels.reduce((sum, [_, qty]) => sum + qty, 0);
-    const noDepth = noLevels.reduce((sum, [_, qty]) => sum + qty, 0);
+    // Imbalance: (yes_depth - no_depth) / total (using active levels only)
+    const yesDepth = activeYesBids.reduce((sum, [_, qty]) => sum + qty, 0);
+    const noDepth = activeNoBids.reduce((sum, [_, qty]) => sum + qty, 0);
     const totalDepth = yesDepth + noDepth;
     const imbalance = totalDepth > 0 ? (yesDepth - noDepth) / totalDepth : 0;
 
@@ -79,7 +83,7 @@ const Orderbook = ({ book, connected }) => {
                         ) : (
                             topYesBids.map(([price, qty], i) => (
                                 <div key={`yes-${price}`}
-                                     className="flex justify-between items-center px-2 py-0.5 mb-px rounded cursor-pointer hover:bg-green-900/10 group transition-colors">
+                                     className={`flex justify-between items-center px-2 py-0.5 mb-px rounded cursor-pointer hover:bg-green-900/10 group transition-opacity duration-300 ${qty === 0 ? 'opacity-25' : ''}`}>
                                     <span className="font-mono text-green-400 text-sm">{price}¢</span>
                                     <span className="font-mono text-zinc-400 text-xs group-hover:text-white">{formatNumber(qty)}</span>
                                 </div>
@@ -100,7 +104,7 @@ const Orderbook = ({ book, connected }) => {
                         ) : (
                             topNoBids.map(([price, qty], i) => (
                                 <div key={`no-${price}`}
-                                     className="flex justify-between items-center px-2 py-0.5 mb-px rounded cursor-pointer hover:bg-red-900/10 group transition-colors">
+                                     className={`flex justify-between items-center px-2 py-0.5 mb-px rounded cursor-pointer hover:bg-red-900/10 group transition-opacity duration-300 ${qty === 0 ? 'opacity-25' : ''}`}>
                                     <span className="font-mono text-red-400 text-sm">{price}¢</span>
                                     <span className="font-mono text-zinc-400 text-xs group-hover:text-white">{formatNumber(qty)}</span>
                                 </div>

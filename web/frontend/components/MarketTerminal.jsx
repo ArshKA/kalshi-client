@@ -11,13 +11,19 @@ const MarketTerminal = ({ ticker, onBack }) => {
     const [error, setError] = useState(null);
 
     // Real-time data from WebSocket
-    const { orderbook, connected: wsConnected, liveData } = useMarketFeed(ticker);
+    const { orderbook, connected: wsConnected, liveData, metrics = {} } = useMarketFeed(ticker);
 
     // Fetch initial market data
     useEffect(() => {
         fetch(`/api/markets/${ticker}`)
             .then(async res => {
-                if (!res.ok) throw new Error('Market not found');
+                if (!res.ok) {
+                    // Try to parse rich error response
+                    const errData = await res.json().catch(() => ({}));
+                    const errorMsg = errData.error || `HTTP ${res.status}`;
+                    const errorCode = errData.error_code ? ` (${errData.error_code})` : '';
+                    throw new Error(`${errorMsg}${errorCode}`);
+                }
                 return res.json();
             })
             .then(data => {
@@ -74,11 +80,19 @@ const MarketTerminal = ({ ticker, onBack }) => {
                                 }`}>
                                 {market.status}
                             </span>
-                            {/* Live indicator */}
+                            {/* Live indicator with latency */}
                             {wsConnected && (
-                                <span className="flex items-center gap-1 text-[10px] text-green-400">
+                                <span
+                                    className="flex items-center gap-1 text-[10px] text-green-400 cursor-help"
+                                    title={`Messages: ${metrics.messageCount || 0}${metrics.reconnectCount > 0 ? ` • Reconnects: ${metrics.reconnectCount}` : ''}`}
+                                >
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
                                     LIVE
+                                    {metrics.latencyMs != null && metrics.latencyMs >= 0 && (
+                                        <span className="text-zinc-500 font-mono ml-0.5">
+                                            {metrics.latencyMs > 0 ? `${Math.round(metrics.latencyMs)}ms` : '<1ms'}
+                                        </span>
+                                    )}
                                 </span>
                             )}
                         </div>

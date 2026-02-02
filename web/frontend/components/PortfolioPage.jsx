@@ -23,7 +23,12 @@ const PortfolioPage = ({ onBack, onSelectMarket }) => {
                     fetch('/api/portfolio/settlements?limit=50'),
                 ]);
 
-                if (!summaryRes.ok) throw new Error('Failed to fetch portfolio');
+                if (!summaryRes.ok) {
+                    const errData = await summaryRes.json().catch(() => ({}));
+                    const errorMsg = errData.error || `HTTP ${summaryRes.status}`;
+                    const errorCode = errData.error_code ? ` (${errData.error_code})` : '';
+                    throw new Error(`${errorMsg}${errorCode}`);
+                }
 
                 const [summaryData, positionsData, settlementsData] = await Promise.all([
                     summaryRes.json(),
@@ -98,8 +103,13 @@ const PortfolioPage = ({ onBack, onSelectMarket }) => {
 
                 {summary && (
                     <div className="space-y-6">
+                        {/* P&L Chart */}
+                        <div className="bg-[#18181b] border border-zinc-800 rounded-xl overflow-hidden">
+                            <BalanceChart />
+                        </div>
+
                         {/* Summary Cards */}
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-4">
                                 <div className="text-xs text-zinc-500 uppercase mb-1">Available Balance</div>
                                 <div className="text-2xl font-mono text-white">{formatDollar(summary.balance)}</div>
@@ -107,6 +117,17 @@ const PortfolioPage = ({ onBack, onSelectMarket }) => {
                             <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-4">
                                 <div className="text-xs text-zinc-500 uppercase mb-1">Portfolio Value</div>
                                 <div className="text-2xl font-mono text-kalshi-green">{formatDollar(summary.portfolio_value)}</div>
+                            </div>
+                            <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-4">
+                                <div className="text-xs text-zinc-500 uppercase mb-1">Unrealized P&L</div>
+                                <div className={`text-2xl font-mono ${(summary.unrealized_pnl || 0) >= 0 ? 'text-kalshi-green' : 'text-kalshi-red'}`}>
+                                    {(summary.unrealized_pnl || 0) >= 0 ? '+' : ''}{formatDollar(summary.unrealized_pnl || 0)}
+                                </div>
+                                {summary.position_market_value > 0 && (
+                                    <div className="text-xs text-zinc-600 mt-1">
+                                        Position value: {formatDollar(summary.position_market_value)}
+                                    </div>
+                                )}
                             </div>
                             <div className="bg-[#18181b] border border-zinc-800 rounded-xl p-4">
                                 <div className="text-xs text-zinc-500 uppercase mb-1">Realized P&L</div>
