@@ -1,4 +1,5 @@
 from __future__ import annotations
+from functools import cached_property
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
 from .enums import OrderStatus, Side, Action, OrderType, MarketStatus
@@ -154,7 +155,7 @@ class FillModel(BaseModel):
     is_taker: Optional[bool] = None
     fill_id: Optional[str] = None
     market_ticker: Optional[str] = None
-    fee_cost: Optional[str] = None
+    fee_cost: Optional[str] = None  # Dollar amount string (e.g., "0.3200")
     created_time: Optional[str] = None
     ts: Optional[int] = None
 
@@ -251,28 +252,28 @@ class OrderbookResponse(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    @property
+    @cached_property
     def yes_levels(self) -> list[OrderbookLevel]:
         """Get YES price levels as typed objects."""
         if not self.orderbook.yes:
             return []
         return [OrderbookLevel(price=p[0], quantity=p[1]) for p in self.orderbook.yes]
 
-    @property
+    @cached_property
     def no_levels(self) -> list[OrderbookLevel]:
         """Get NO price levels as typed objects."""
         if not self.orderbook.no:
             return []
         return [OrderbookLevel(price=p[0], quantity=p[1]) for p in self.orderbook.no]
 
-    @property
+    @cached_property
     def best_yes_bid(self) -> Optional[int]:
         """Highest YES bid price, or None if no bids."""
         if not self.orderbook.yes:
             return None
         return max(p[0] for p in self.orderbook.yes)
 
-    @property
+    @cached_property
     def best_no_bid(self) -> Optional[int]:
         """Highest NO bid price, or None if no bids."""
         if not self.orderbook.no:

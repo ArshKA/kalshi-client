@@ -1,5 +1,5 @@
 import pytest
-from kalshi_api.models import BalanceModel, OrderModel, MarketModel
+from kalshi_api.models import BalanceModel, OrderModel, MarketModel, FillModel
 from kalshi_api.enums import Action, Side, OrderStatus
 
 
@@ -45,3 +45,21 @@ def test_market_model_validation():
 def test_invalid_data_raises_error():
     with pytest.raises(ValueError):
         BalanceModel.model_validate({"balance": "not_an_int"})
+
+
+def test_fill_model_fee_cost_is_dollar_string():
+    """Verify fee_cost is kept as dollar amount string."""
+    data = {
+        "trade_id": "t1",
+        "ticker": "TEST",
+        "order_id": "o1",
+        "side": "yes",
+        "action": "buy",
+        "count": 1,
+        "yes_price": 50,
+        "no_price": 50,
+        "fee_cost": "0.3200",
+    }
+    model = FillModel.model_validate(data)
+    assert model.fee_cost == "0.3200"
+    assert isinstance(model.fee_cost, str)

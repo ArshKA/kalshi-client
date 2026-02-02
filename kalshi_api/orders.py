@@ -73,7 +73,7 @@ class Order:
     def cancel(self) -> Order:
         """Cancel this order. Returns self with updated data."""
         response = self.client.delete(f"/portfolio/orders/{self.data.order_id}")
-        self.data = OrderModel.model_validate(response.get("order", response))
+        self.data = OrderModel.model_validate(response["order"])
         return self
 
     def __getattr__(self, name: str):

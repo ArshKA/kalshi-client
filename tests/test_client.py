@@ -1,6 +1,4 @@
 import pytest
-from unittest.mock import MagicMock
-from kalshi_api import KalshiClient
 from kalshi_api.exceptions import (
     AuthenticationError,
     InsufficientFundsError,
@@ -9,62 +7,67 @@ from kalshi_api.exceptions import (
 )
 
 
-def test_auth_headers_generated(client, mock_response, mocker):
+def test_auth_headers_generated(client, mock_response):
     """Verify headers include signature."""
-    requests_get = mocker.patch("requests.get", return_value=mock_response({}))
+    client._session.request.return_value = mock_response({})
 
     client.get("/test")
 
-    # Check headers
-    call_args = requests_get.call_args
-    headers = call_args[1]["headers"]
+    call_args = client._session.request.call_args
+    headers = call_args.kwargs["headers"]
     assert "KALSHI-ACCESS-KEY" in headers
     assert "KALSHI-ACCESS-SIGNATURE" in headers
     assert headers["KALSHI-ACCESS-KEY"] == "fake_key"
 
 
-def test_handle_success(client, mock_response, mocker):
+def test_handle_success(client, mock_response):
     """Verify successful response returns JSON."""
-    mocker.patch("requests.get", return_value=mock_response({"data": "ok"}))
+    client._session.request.return_value = mock_response({"data": "ok"})
     resp = client.get("/test")
     assert resp == {"data": "ok"}
 
 
-def test_handle_401_raises_auth_error(client, mock_response, mocker):
+def test_handle_401_raises_auth_error(client, mock_response):
     """Verify 401 raises AuthenticationError."""
-    mocker.patch(
-        "requests.get",
-        return_value=mock_response({"message": "Unauthorized"}, status_code=401),
+    client._session.request.return_value = mock_response(
+        {"message": "Unauthorized"}, status_code=401
     )
     with pytest.raises(AuthenticationError):
         client.get("/test")
 
 
-def test_handle_404_raises_not_found(client, mock_response, mocker):
+def test_handle_404_raises_not_found(client, mock_response):
     """Verify 404 raises ResourceNotFoundError."""
-    mocker.patch(
-        "requests.get",
-        return_value=mock_response({"message": "Not Found"}, status_code=404),
+    client._session.request.return_value = mock_response(
+        {"message": "Not Found"}, status_code=404
     )
     with pytest.raises(ResourceNotFoundError):
         client.get("/test")
 
 
-def test_insufficient_funds_error(client, mock_response, mocker):
+def test_insufficient_funds_error(client, mock_response):
     """Verify specific error code raises InsufficientFundsError."""
-    mocker.patch(
-        "requests.post",
-        return_value=mock_response(
-            {"code": "insufficient_funds", "message": "No money"}, status_code=400
-        ),
+    client._session.request.return_value = mock_response(
+        {"code": "insufficient_funds", "message": "No money"}, status_code=400
     )
     with pytest.raises(InsufficientFundsError):
         client.post("/orders", {})
 
     # Test alternate code "insufficient_balance"
-    mocker.patch(
-        "requests.post",
-        return_value=mock_response({"code": "insufficient_balance"}, status_code=400),
+    client._session.request.return_value = mock_response(
+        {"code": "insufficient_balance"}, status_code=400
     )
     with pytest.raises(InsufficientFundsError):
         client.post("/orders", {})
+
+
+def test_api_error_stores_message(client, mock_response):
+    """Verify KalshiAPIError stores the message attribute."""
+    client._session.request.return_value = mock_response(
+        {"message": "Something went wrong", "code": "bad_request"}, status_code=400
+    )
+    with pytest.raises(KalshiAPIError) as exc_info:
+        client.get("/test")
+    assert exc_info.value.message == "Something went wrong"
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.error_code == "bad_request"

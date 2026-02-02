@@ -12,6 +12,8 @@ def mock_response():
         resp.json.return_value = json_data
         resp.status_code = status_code
         resp.text = text
+        resp.content = b"ok" if json_data else b""
+        resp.headers = {}
         return resp
 
     return _create
@@ -20,7 +22,7 @@ def mock_response():
 @pytest.fixture
 def client(mocker):
     """
-    Returns a KalshiClient with mocked authentication and requests.
+    Returns a KalshiClient with mocked authentication and HTTP session.
     This allows testing without real keys or API calls.
     """
     # Mock private key loading and signing to avoid file I/O and crypto
@@ -30,10 +32,8 @@ def client(mocker):
         return_value=("1234567890", "fake_sig"),
     )
 
-    # Mock requests to prevent network calls
-    mocker.patch("requests.get")
-    mocker.patch("requests.post")
-    mocker.patch("requests.delete")
+    # Mock Session to prevent network calls
+    mocker.patch("requests.Session")
 
     # Initialize client with dummy values
     c = KalshiClient(api_key_id="fake_key", private_key_path="fake_path", demo=True)

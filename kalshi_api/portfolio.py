@@ -31,6 +31,7 @@ class Portfolio:
         *,
         yes_price: int | None = None,
         no_price: int | None = None,
+        client_order_id: str | None = None,
     ) -> Order:
         """Place an order on a market.
 
@@ -44,6 +45,8 @@ class Portfolio:
             no_price: Price in cents (1-99) for the NO side.
                       Converted to yes_price internally (yes_price = 100 - no_price).
                       Provide exactly one of yes_price or no_price for limit orders.
+            client_order_id: Optional idempotency key. If the same ID is resubmitted,
+                             the API returns the existing order instead of creating a duplicate.
         """
         if yes_price is not None and no_price is not None:
             raise ValueError("Specify yes_price or no_price, not both")
@@ -64,10 +67,59 @@ class Portfolio:
         }
         if yes_price is not None:
             order_data["yes_price"] = yes_price
+        if client_order_id is not None:
+            order_data["client_order_id"] = client_order_id
 
         response = self.client.post("/portfolio/orders", order_data)
-        data = response.get("order", response)
-        model = OrderModel.model_validate(data)
+        model = OrderModel.model_validate(response["order"])
+        return Order(self.client, model)
+
+    def amend_order(
+        self,
+        order_id: str,
+        *,
+        count: int | None = None,
+        yes_price: int | None = None,
+        no_price: int | None = None,
+    ) -> Order:
+        """Amend a resting order's price or count.
+
+        Args:
+            order_id: ID of the order to amend.
+            count: New total contract count.
+            yes_price: New YES price in cents.
+            no_price: New NO price in cents. Converted to yes_price internally.
+        """
+        if yes_price is not None and no_price is not None:
+            raise ValueError("Specify yes_price or no_price, not both")
+
+        if no_price is not None:
+            yes_price = 100 - no_price
+
+        body: dict = {}
+        if count is not None:
+            body["count"] = count
+        if yes_price is not None:
+            body["yes_price"] = yes_price
+
+        if not body:
+            raise ValueError("Must specify at least one of count, yes_price, or no_price")
+
+        response = self.client.post(f"/portfolio/orders/{order_id}/amend", body)
+        model = OrderModel.model_validate(response["order"])
+        return Order(self.client, model)
+
+    def decrease_order(self, order_id: str, reduce_by: int) -> Order:
+        """Decrease the remaining count of a resting order.
+
+        Args:
+            order_id: ID of the order to decrease.
+            reduce_by: Number of contracts to reduce by.
+        """
+        response = self.client.post(
+            f"/portfolio/orders/{order_id}/decrease", {"reduce_by": reduce_by}
+        )
+        model = OrderModel.model_validate(response["order"])
         return Order(self.client, model)
 
     def get_orders(
@@ -99,8 +151,7 @@ class Portfolio:
     def get_order(self, order_id: str) -> Order:
         """Get a single order by ID."""
         response = self.client.get(f"/portfolio/orders/{order_id}")
-        data = response.get("order", response)
-        model = OrderModel.model_validate(data)
+        model = OrderModel.model_validate(response["order"])
         return Order(self.client, model)
 
     def get_positions(

@@ -8,6 +8,7 @@ class KalshiAPIError(KalshiError):
     def __init__(self, status_code: int, message: str, error_code: str | None = None):
         super().__init__(f"{status_code}: {message} ({error_code})")
         self.status_code = status_code
+        self.message = message
         self.error_code = error_code
 
 
@@ -21,3 +22,7 @@ class InsufficientFundsError(KalshiAPIError):
 
 class ResourceNotFoundError(KalshiAPIError):
     """Raised when a resource (market, order) is not found (404)."""
+
+
+class RateLimitError(KalshiAPIError):
+    """Raised when rate limit retries are exhausted (429)."""

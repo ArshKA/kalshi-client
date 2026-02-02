@@ -1,13 +1,13 @@
 import pytest
-import requests
+import json
+from unittest.mock import ANY
 from kalshi_api.enums import Action, Side, OrderType, OrderStatus
 
 
-def test_user_balance_workflow(client, mock_response, mocker):
+def test_user_balance_workflow(client, mock_response):
     """Test fetching user balance."""
-    mock_get = mocker.patch(
-        "requests.get",
-        return_value=mock_response({"balance": 5000, "portfolio_value": 10000}),
+    client._session.request.return_value = mock_response(
+        {"balance": 5000, "portfolio_value": 10000}
     )
 
     balance = client.portfolio.balance
@@ -17,32 +17,29 @@ def test_user_balance_workflow(client, mock_response, mocker):
     assert balance.portfolio_value == 10000
 
     # Verify endpoint called
-    mock_get.assert_called_with(
+    client._session.request.assert_called_with(
+        "GET",
         "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/balance",
-        headers=mocker.ANY,
-        timeout=mocker.ANY,
+        headers=ANY,
+        timeout=ANY,
     )
 
 
 def test_place_order_workflow(client, mock_response, mocker):
     """Test placing an order via Portfolio object."""
-    # Mock response for successful order placement
-    mock_post = mocker.patch(
-        "requests.post",
-        return_value=mock_response(
-            {
-                "order": {
-                    "order_id": "bfs-123",
-                    "ticker": "KXTEST",
-                    "action": "buy",
-                    "side": "yes",
-                    "count": 5,
-                    "price": 50,
-                    "status": "resting",
-                    "created_time": "2023-01-01T00:00:00Z",
-                }
+    client._session.request.return_value = mock_response(
+        {
+            "order": {
+                "order_id": "bfs-123",
+                "ticker": "KXTEST",
+                "action": "buy",
+                "side": "yes",
+                "count": 5,
+                "price": 50,
+                "status": "resting",
+                "created_time": "2023-01-01T00:00:00Z",
             }
-        ),
+        }
     )
 
     # Mock Market object (just need ticker)
@@ -53,20 +50,15 @@ def test_place_order_workflow(client, mock_response, mocker):
         market, action=Action.BUY, side=Side.YES, count=5, yes_price=50
     )
 
-    # Verify Order object returned (delegated through __getattr__)
+    # Verify Order object returned
     assert order.order_id == "bfs-123"
     assert order.status == OrderStatus.RESTING
 
     # Verify correct payload sent
-    mock_post.assert_called_once()
-    call_args = mock_post.call_args
-    assert (
-        "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/orders"
-        in call_args[0]
-    )
-    import json
-
-    body = json.loads(call_args[1]["data"])
+    call_args = client._session.request.call_args
+    assert call_args.args[0] == "POST"
+    assert "/portfolio/orders" in call_args.args[1]
+    body = json.loads(call_args.kwargs["data"])
     assert body["ticker"] == "KXTEST"
     assert body["action"] == "buy"
     assert body["side"] == "yes"
@@ -74,10 +66,9 @@ def test_place_order_workflow(client, mock_response, mocker):
     assert body["yes_price"] == 50
 
 
-def test_market_orderbook_workflow(client, mock_response, mocker):
+def test_market_orderbook_workflow(client, mock_response):
     """Test fetching orderbook via Market object."""
-    mock_get = mocker.patch("requests.get")
-    mock_get.side_effect = [
+    client._session.request.side_effect = [
         # Call 1: Market data
         mock_response(
             {
@@ -104,8 +95,8 @@ def test_market_orderbook_workflow(client, mock_response, mocker):
     # Verify typed OrderbookResponse
     assert ob.orderbook.yes == [(10, 50)]
     assert ob.best_yes_bid == 10
-    assert mock_get.call_count == 2
+    assert client._session.request.call_count == 2
 
     # Verify URL of second call
-    call_args_list = mock_get.call_args_list
-    assert "/markets/KXTEST/orderbook" in call_args_list[1][0][0]
+    call_args_list = client._session.request.call_args_list
+    assert "/markets/KXTEST/orderbook" in call_args_list[1].args[1]

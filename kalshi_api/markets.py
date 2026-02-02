@@ -23,6 +23,7 @@ class Market:
         self.client = client
         self.data = data
         self._series_ticker_resolved = False
+        self._resolved_series_ticker: str | None = None
 
     # --- Typed properties for core fields ---
 
@@ -99,17 +100,19 @@ class Market:
     @property
     def series_ticker(self) -> str | None:
         """Lazy-resolved series_ticker. Fetches from event API on first access if missing."""
-        if self.data.series_ticker is None and not self._series_ticker_resolved:
+        if self.data.series_ticker is not None:
+            return self.data.series_ticker
+        if not self._series_ticker_resolved:
             self._series_ticker_resolved = True
             if self.data.event_ticker:
                 try:
                     event_response = self.client.get(f"/events/{self.data.event_ticker}")
-                    self.data.series_ticker = event_response.get("event", {}).get("series_ticker")
+                    self._resolved_series_ticker = event_response["event"]["series_ticker"]
                 except Exception as e:
                     logger.warning(
                         "Failed to resolve series_ticker for %s: %s", self.data.ticker, e
                     )
-        return self.data.series_ticker
+        return self._resolved_series_ticker
 
     def get_orderbook(self) -> OrderbookResponse:
         """Get the orderbook for this market."""

@@ -14,7 +14,7 @@ from kalshi_api.enums import MarketStatus
 @pytest.fixture(scope="module")
 def live_client():
     """Create a real KalshiClient using credentials from .env"""
-    return KalshiClient()
+    return KalshiClient.from_env()
 
 
 class TestLiveAPI:
