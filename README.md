@@ -5,7 +5,7 @@ A typed Python client for the [Kalshi](https://kalshi.com) prediction markets AP
 ## Installation
 
 ```bash
-
+pip install kalshi-api
 ```
 
 Create a `.env` file with your credentials from [kalshi.com](https://kalshi.com) → Account & Security → API Keys:
@@ -128,6 +128,7 @@ except KalshiAPIError as e:
 | Local orderbook management | ✓ | — |
 | Pydantic models | ✓ | — |
 | Core trading API coverage | ✓ | ✓ |
+| Full API coverage | — | ✓ |
 
 The official SDK is auto-generated from the OpenAPI spec. This library adds the infrastructure needed for production trading: real-time data, error recovery, and ergonomic interfaces.
 
