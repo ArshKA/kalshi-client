@@ -76,10 +76,10 @@ class KalshiClient:
             max_retries: Max retries for transient failures (default 3). Set to 0 to disable.
             rate_limiter: Optional rate limiter for proactive throttling. See RateLimiter class.
         """
-        self.api_key_id = api_key_id or os.getenv("KALSHI_API_KEY_ID")
+        resolved_api_key_id = api_key_id or os.getenv("KALSHI_API_KEY_ID")
         private_key_path = private_key_path or os.getenv("KALSHI_PRIVATE_KEY_PATH")
 
-        if not self.api_key_id:
+        if not resolved_api_key_id:
             raise ValueError(
                 "API key ID required. Set KALSHI_API_KEY_ID env var or pass api_key_id."
             )
@@ -88,6 +88,7 @@ class KalshiClient:
                 "Private key path required. Set KALSHI_PRIVATE_KEY_PATH env var or pass private_key_path."
             )
 
+        self.api_key_id: str = resolved_api_key_id
         self.api_base = api_base or (DEMO_API_BASE if demo else DEFAULT_API_BASE)
         self._api_path = urlparse(self.api_base).path
         self.timeout = timeout
@@ -174,21 +175,25 @@ class KalshiClient:
             response_body = response.text
             code = None
 
-        # Common kwargs for all exceptions
-        context = {
-            "method": method,
-            "endpoint": endpoint,
-            "request_body": request_body,
-            "response_body": response_body,
-        }
-
         # Map to specific exception types
         if status_code in (401, 403):
-            raise AuthenticationError(status_code, message, code, **context)
+            raise AuthenticationError(
+                status_code, message, code,
+                method=method, endpoint=endpoint,
+                request_body=request_body, response_body=response_body,
+            )
         elif status_code == 404:
-            raise ResourceNotFoundError(status_code, message, code, **context)
+            raise ResourceNotFoundError(
+                status_code, message, code,
+                method=method, endpoint=endpoint,
+                request_body=request_body, response_body=response_body,
+            )
         elif code in ("insufficient_funds", "insufficient_balance"):
-            raise InsufficientFundsError(status_code, message, code, **context)
+            raise InsufficientFundsError(
+                status_code, message, code,
+                method=method, endpoint=endpoint,
+                request_body=request_body, response_body=response_body,
+            )
         elif code in (
             "order_rejected",
             "market_closed",
@@ -197,9 +202,17 @@ class KalshiClient:
             "self_trade",
             "post_only_rejected",
         ):
-            raise OrderRejectedError(status_code, message, code, **context)
+            raise OrderRejectedError(
+                status_code, message, code,
+                method=method, endpoint=endpoint,
+                request_body=request_body, response_body=response_body,
+            )
         else:
-            raise KalshiAPIError(status_code, message, code, **context)
+            raise KalshiAPIError(
+                status_code, message, code,
+                method=method, endpoint=endpoint,
+                request_body=request_body, response_body=response_body,
+            )
 
     def _request(
         self,
