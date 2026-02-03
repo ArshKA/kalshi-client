@@ -65,7 +65,7 @@ pytest tests/ --cov=kalshi_api
 - 404 handling for missing orders
 
 ### Workflows (`test_workflow.py`)
-- `portfolio.balance` property
+- `portfolio.get_balance()` method
 - `portfolio.place_order()` with Market objects
 - `market.get_orderbook()` returns typed response
 
@@ -80,8 +80,8 @@ pytest tests/ --cov=kalshi_api
 - Auth header generation
 
 ### Exchange (`test_exchange.py`)
-- `client.exchange.status` - operational status
-- `client.exchange.is_trading` - quick boolean check
+- `client.exchange.get_status()` - operational status
+- `client.exchange.is_trading()` - quick boolean check
 - `client.exchange.get_schedule()` - trading hours
 - `client.exchange.get_announcements()` - platform announcements
 - `client.exchange.get_user_data_timestamp()` - data validation timestamp
@@ -92,7 +92,7 @@ pytest tests/ --cov=kalshi_api
 - `client.api_keys.create()` - create with public key
 - `client.api_keys.generate()` - generate key pair
 - `client.api_keys.delete()` - delete key
-- `client.api_keys.limits` - rate limit info
+- `client.api_keys.get_limits()` - rate limit info
 - 404 handling for non-existent keys
 
 ### Series & Trades (`test_series.py`)

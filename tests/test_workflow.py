@@ -10,7 +10,7 @@ def test_user_balance_workflow(client, mock_response):
         {"balance": 5000, "portfolio_value": 10000}
     )
 
-    balance = client.portfolio.balance
+    balance = client.portfolio.get_balance()
 
     # Verify values
     assert balance.balance == 5000

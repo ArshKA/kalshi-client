@@ -12,16 +12,14 @@ class Exchange:
     def __init__(self, client: KalshiClient) -> None:
         self._client = client
 
-    @property
-    def status(self) -> ExchangeStatus:
+    def get_status(self) -> ExchangeStatus:
         """Get current exchange operational status."""
         data = self._client.get("/exchange/status")
         return ExchangeStatus.model_validate(data)
 
-    @property
     def is_trading(self) -> bool:
         """Quick check if trading is currently active."""
-        return self.status.trading_active
+        return self.get_status().trading_active
 
     def get_schedule(self) -> dict[str, Any]:
         """Get exchange trading schedule (raw format)."""

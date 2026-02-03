@@ -53,8 +53,7 @@ class APIKeys:
         """
         self._client.delete(f"/api_keys/{key_id}")
 
-    @property
-    def limits(self) -> APILimits:
+    def get_limits(self) -> APILimits:
         """Get API rate limits for this account."""
         data = self._client.get("/account/limits")
         return APILimits.model_validate(data)

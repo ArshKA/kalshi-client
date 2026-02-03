@@ -22,7 +22,7 @@ class TestLiveAPI:
 
     def test_get_balance(self, live_client):
         """Test fetching real account balance."""
-        balance = live_client.portfolio.balance
+        balance = live_client.portfolio.get_balance()
 
         print(f"\n  Balance: ${balance.balance / 100:.2f}")
         print(f"  Portfolio Value: ${balance.portfolio_value / 100:.2f}")

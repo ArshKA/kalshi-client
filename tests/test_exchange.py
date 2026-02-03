@@ -14,7 +14,7 @@ class TestExchangeStatus:
             "trading_active": True,
         })
 
-        status = client.exchange.status
+        status = client.exchange.get_status()
 
         assert status.exchange_active is True
         assert status.trading_active is True
@@ -32,7 +32,7 @@ class TestExchangeStatus:
             "trading_active": False,
         })
 
-        status = client.exchange.status
+        status = client.exchange.get_status()
 
         assert status.exchange_active is True
         assert status.trading_active is False
@@ -44,7 +44,7 @@ class TestExchangeStatus:
             "trading_active": True,
         })
 
-        assert client.exchange.is_trading is True
+        assert client.exchange.is_trading() is True
 
     def test_is_trading_when_closed(self, client, mock_response):
         """Test is_trading returns False when trading inactive."""
@@ -53,7 +53,7 @@ class TestExchangeStatus:
             "trading_active": False,
         })
 
-        assert client.exchange.is_trading is False
+        assert client.exchange.is_trading() is False
 
 
 class TestExchangeSchedule:

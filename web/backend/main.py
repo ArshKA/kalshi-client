@@ -129,7 +129,7 @@ def get_balance_short():
     """Get portfolio balance (short URL alias)."""
     c = get_client()
     try:
-        return c.portfolio.balance
+        return c.portfolio.get_balance()
     except KalshiAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
@@ -139,7 +139,7 @@ def get_exchange_status():
     """Get exchange operational status, schedule, and announcements."""
     c = get_client()
     try:
-        status = c.exchange.status
+        status = c.exchange.get_status()
         schedule = c.exchange.get_schedule()
         announcements = c.exchange.get_announcements()
         return {
@@ -231,7 +231,7 @@ def get_portfolio_balance():
     """Get portfolio balance (full URL path)."""
     c = get_client()
     try:
-        return c.portfolio.balance.model_dump()
+        return c.portfolio.get_balance().model_dump()
     except KalshiAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
@@ -263,7 +263,7 @@ def get_portfolio_summary():
     """Get portfolio summary: balance and position stats."""
     c = get_client()
     try:
-        balance = c.portfolio.balance
+        balance = c.portfolio.get_balance()
         positions = c.portfolio.get_positions(count_filter="position", fetch_all=True)
 
         # Calculate total position exposure

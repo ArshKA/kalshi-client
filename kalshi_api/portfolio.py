@@ -19,8 +19,7 @@ class Portfolio:
     def __init__(self, client: KalshiClient) -> None:
         self._client = client
 
-    @property
-    def balance(self) -> BalanceModel:
+    def get_balance(self) -> BalanceModel:
         """Get portfolio balance. Values are in cents."""
         data = self._client.get("/portfolio/balance")
         return BalanceModel.model_validate(data)

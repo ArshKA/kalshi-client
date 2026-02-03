@@ -172,7 +172,7 @@ class TestAPILimits:
             "reset_at": 1704067260,
         })
 
-        limits = client.api_keys.limits
+        limits = client.api_keys.get_limits()
 
         assert limits.tier == "standard"
         assert limits.remaining == 95
@@ -190,7 +190,7 @@ class TestAPILimits:
             "tier": "basic",
         })
 
-        limits = client.api_keys.limits
+        limits = client.api_keys.get_limits()
 
         assert limits.tier == "basic"
         assert limits.remaining is None
