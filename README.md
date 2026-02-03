@@ -126,8 +126,8 @@ except KalshiAPIError as e:
 | Domain objects (`Market`, `Order`) | ✓ | — |
 | Typed exceptions | ✓ | — |
 | Local orderbook management | ✓ | — |
-| Pydantic models | ✓ | ✓ |
-| Full API coverage | ✓ | ✓ |
+| Pydantic models | ✓ | — |
+| Core trading API coverage | ✓ | ✓ |
 
 The official SDK is auto-generated from the OpenAPI spec. This library adds the infrastructure needed for production trading: real-time data, error recovery, and ergonomic interfaces.
 
