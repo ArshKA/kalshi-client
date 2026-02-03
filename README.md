@@ -2,6 +2,14 @@
 
 A typed Python client for the [Kalshi](https://kalshi.com) prediction markets API.
 
+## Features
+
+- **WebSocket streaming** — Real-time price feeds, orderbook deltas, and fill notifications
+- **Typed models** — Full Pydantic models with IDE autocomplete and validation
+- **Automatic retries** — Exponential backoff for rate limits and transient failures
+- **Domain objects** — `Market`, `Order`, `Event` classes with intuitive methods
+- **Local orderbook** — `OrderbookManager` maintains state from WebSocket deltas
+
 ## Installation
 
 ```bash
@@ -137,6 +145,59 @@ except RateLimitError:
     print("Slow down")  # Client auto-retries with backoff
 except KalshiAPIError as e:
     print(f"API error: {e.status_code} - {e.error_code}")
+    if e.retryable:
+        # Safe to retry with backoff
+        pass
+```
+
+## Comparison with Official SDK
+
+The official `kalshi-python` SDK is auto-generated from the OpenAPI spec. This library takes a different approach:
+
+| | kalshi-api | kalshi-python |
+|-|------------|---------------|
+| WebSocket streaming | ✓ | — |
+| Automatic retry/backoff | ✓ | — |
+| Rate limiting | ✓ | — |
+| Domain objects | ✓ | — |
+| Typed exceptions | ✓ | — |
+
+### Example: Streaming orderbook
+
+```python
+# kalshi-api: subscribe to real-time updates
+feed = client.feed()
+
+@feed.on("orderbook_delta")
+def on_book(msg):
+    print(f"{msg.market_ticker}: {msg.side} {msg.price} {msg.delta:+d}")
+
+feed.subscribe("orderbook_delta", market_ticker="KXBTC-25JAN15")
+feed.start()
+
+# Official SDK: no WebSocket support, must poll
+```
+
+### Example: Placing an order with error handling
+
+```python
+# kalshi-api: typed exceptions with context
+from kalshi_api import InsufficientFundsError, OrderRejectedError
+
+try:
+    order = client.portfolio.place_order(
+        ticker="KXBTC-25JAN15",
+        action=Action.BUY,
+        side=Side.YES,
+        count=10,
+        yes_price=45,
+    )
+except InsufficientFundsError:
+    print("Need more funds")
+except OrderRejectedError as e:
+    print(f"Rejected: {e.error_code}")  # e.g., "market_closed"
+
+# Official SDK: generic exceptions, manual parsing
 ```
 
 ## Web UI
