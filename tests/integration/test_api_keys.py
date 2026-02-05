@@ -103,17 +103,14 @@ class TestAPIKeysMutation:
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         ).decode("utf-8")
 
-        # Create API key with our public key
-        created = client.api_keys.create(
+        # Create API key with our public key (returns just the key ID string)
+        key_id = client.api_keys.create(
             public_key=public_key_pem,
             name="integration-test-create-key",
         )
 
-        assert created.id is not None
-        assert isinstance(created.id, str)
-        # Unlike generate(), create() doesn't return private key (we provided it)
-
-        key_id = created.id
+        assert key_id is not None
+        assert isinstance(key_id, str)
 
         # Verify it appears in list
         keys = client.api_keys.list()

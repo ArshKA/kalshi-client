@@ -17,18 +17,21 @@ class APIKeys:
         data = self._client.get("/api_keys")
         return [APIKey.model_validate(k) for k in data.get("api_keys", [])]
 
-    def create(self, public_key: str, name: str | None = None) -> APIKey:
+    def create(self, public_key: str, name: str | None = None) -> str:
         """Create an API key with a provided RSA public key.
 
         Args:
             public_key: PEM-encoded RSA public key.
             name: Optional name for the key.
+
+        Returns:
+            The API key ID string.
         """
         body: dict = {"public_key": public_key}
         if name:
             body["name"] = name
         data = self._client.post("/api_keys", body)
-        return APIKey.model_validate(data["api_key"])
+        return data["api_key_id"]
 
     def generate(self, name: str | None = None) -> GeneratedAPIKey:
         """Generate a new API key pair (Kalshi creates both keys).

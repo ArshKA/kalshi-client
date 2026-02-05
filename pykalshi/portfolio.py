@@ -332,7 +332,12 @@ class Portfolio:
             results = portfolio.batch_place_orders(orders)
         """
         response = self._client.post("/portfolio/orders/batched", {"orders": orders})
-        return DataFrameList(Order(self._client, OrderModel.model_validate(o)) for o in response.get("orders", []))
+        # Response has nested structure: orders[].order contains the actual order data
+        result = []
+        for item in response.get("orders", []):
+            order_data = item.get("order") or item  # Fall back to item if no nested 'order'
+            result.append(Order(self._client, OrderModel.model_validate(order_data)))
+        return DataFrameList(result)
 
     def batch_cancel_orders(self, order_ids: list[str]) -> dict:
         """Cancel multiple orders atomically.

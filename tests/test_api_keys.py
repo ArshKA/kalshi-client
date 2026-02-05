@@ -58,20 +58,15 @@ class TestAPIKeyCreate:
     def test_create_api_key(self, client, mock_response):
         """Test creating API key with public key."""
         client._session.request.return_value = mock_response({
-            "api_key": {
-                "id": "new-key-001",
-                "name": "My New Key",
-                "created_time": "2024-01-20T00:00:00Z",
-            }
+            "api_key_id": "new-key-001",
         })
 
-        key = client.api_keys.create(
+        key_id = client.api_keys.create(
             public_key="-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----",
             name="My New Key",
         )
 
-        assert key.id == "new-key-001"
-        assert key.name == "My New Key"
+        assert key_id == "new-key-001"
 
         # Verify POST body
         call_args = client._session.request.call_args
@@ -83,11 +78,12 @@ class TestAPIKeyCreate:
     def test_create_api_key_no_name(self, client, mock_response):
         """Test creating API key without name."""
         client._session.request.return_value = mock_response({
-            "api_key": {"id": "new-key-002"}
+            "api_key_id": "new-key-002"
         })
 
-        key = client.api_keys.create(public_key="-----BEGIN PUBLIC KEY-----\n...")
+        key_id = client.api_keys.create(public_key="-----BEGIN PUBLIC KEY-----\n...")
 
+        assert key_id == "new-key-002"
         call_args = client._session.request.call_args
         body = json.loads(call_args.kwargs["data"])
         assert "name" not in body
