@@ -57,42 +57,59 @@ _STYLES = """\
 KALSHI_BASE_URL = "https://kalshi.com"
 
 
-# --- Formatting helpers ---
+# --- Link helpers ---
+# Kalshi URL structure:
+#   - Series page: /markets/{series_ticker}
+#   - Market page: /events/{event_ticker}?contract={market_ticker}
+# Note: Direct event URLs (/events/{event_ticker}) don't work without a slug,
+# so event links point to the series page instead.
 
-def _kalshi_link(display_ticker: str, url_ticker: str | None = None) -> str:
-    """Render ticker as a clickable link to Kalshi.
+def _link(display: str, url: str) -> str:
+    """Render a clickable link."""
+    return f'<a href="{url}" target="_blank" class="m" style="color:inherit;text-decoration:none;border-bottom:1px dashed #9ca3af">{escape(display)}</a>'
 
-    Args:
-        display_ticker: The ticker to display in the link text.
-        url_ticker: The ticker to use in the URL. If None, the link is not clickable.
+
+def _plain(text: str) -> str:
+    """Render plain monospace text (non-clickable)."""
+    return f'<span class="m">{escape(text)}</span>'
+
+
+def _market_url(market_ticker: str, event_ticker: str) -> str:
+    """Build URL for a specific market contract."""
+    return f"{KALSHI_BASE_URL}/events/{event_ticker}?contract={market_ticker}"
+
+
+def _series_url(series_ticker: str) -> str:
+    """Build URL for a series page."""
+    return f"{KALSHI_BASE_URL}/markets/{series_ticker}"
+
+
+def _derive_event_ticker(market_ticker: str) -> str | None:
+    """Derive event ticker from market ticker by removing the last segment.
+
+    e.g., KXNCAAMBTOTAL-26FEB04OKLAUK-136 -> KXNCAAMBTOTAL-26FEB04OKLAUK
     """
-    display = escape(display_ticker)
-    if url_ticker:
-        safe_ticker = escape(url_ticker.lower())
-        url = f"{KALSHI_BASE_URL}/markets/{safe_ticker}"
-        return f'<a href="{url}" target="_blank" class="m" style="color:inherit;text-decoration:none;border-bottom:1px dashed #9ca3af">{display}</a>'
-    # No valid URL ticker - render as plain text
-    return f'<span class="m">{display}</span>'
+    return market_ticker.rsplit("-", 1)[0] if "-" in market_ticker else None
 
 
 def _ticker_link(ticker: str, event_ticker: str | None = None) -> str:
-    """Render market ticker as a clickable link to Kalshi.
-
-    Args:
-        ticker: The market ticker to display.
-        event_ticker: The event ticker to use for the URL (required for working links).
-    """
-    return _kalshi_link(ticker, event_ticker)
+    """Render market ticker as link. Derives event_ticker if not provided."""
+    event = event_ticker or _derive_event_ticker(ticker)
+    if event:
+        return _link(ticker, _market_url(ticker, event))
+    return _plain(ticker)
 
 
-def _event_link(event_ticker: str, label: str | None = None) -> str:
-    """Render event ticker as a clickable link to Kalshi."""
-    return _kalshi_link(label or event_ticker, event_ticker)
+def _event_link(event_ticker: str, series_ticker: str | None = None) -> str:
+    """Render event ticker as link (points to series page)."""
+    if series_ticker:
+        return _link(event_ticker, _series_url(series_ticker))
+    return _plain(event_ticker)
 
 
-def _series_link(series_ticker: str, label: str | None = None) -> str:
-    """Render series ticker as a clickable link to Kalshi."""
-    return _kalshi_link(label or series_ticker, series_ticker)
+def _series_link(series_ticker: str) -> str:
+    """Render series ticker as link."""
+    return _link(series_ticker, _series_url(series_ticker))
 
 
 def _cents(v: int | None, as_dollars: bool = False) -> str:
@@ -304,7 +321,7 @@ def event_html(e: Event) -> str:
     category = f'<span class="pill pill-gray">{escape(e.category)}</span>' if e.category else "—"
 
     rows = [
-        _row("Event", _event_link(e.event_ticker)),
+        _row("Event", _event_link(e.event_ticker, e.series_ticker)),
         _row("Series", _series_link(e.series_ticker)),
         _row("Title", escape(e.title) if e.title else "—"),
         _row("Category", category),
