@@ -7,7 +7,7 @@ from .enums import OrderStatus, Action, Side, OrderType
 if TYPE_CHECKING:
     from .client import KalshiClient
 
-TERMINAL_STATUSES = frozenset({OrderStatus.CANCELED, OrderStatus.FILLED, OrderStatus.EXECUTED})
+TERMINAL_STATUSES = frozenset({OrderStatus.CANCELED, OrderStatus.EXECUTED})
 
 
 class Order:
@@ -105,6 +105,10 @@ class Order:
             count=count,
             yes_price=yes_price,
             no_price=no_price,
+            # Pass existing order data to avoid re-fetch
+            ticker=self.ticker,
+            action=self.action,
+            side=self.side,
         )
         self.data = updated.data
         return self
@@ -137,7 +141,7 @@ class Order:
     ) -> Order:
         """Block until order reaches a terminal state.
 
-        Terminal states are: FILLED, CANCELED, EXECUTED.
+        Terminal states are: CANCELED, EXECUTED.
 
         Args:
             timeout: Maximum seconds to wait before raising TimeoutError.

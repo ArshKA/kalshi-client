@@ -1,7 +1,7 @@
 from __future__ import annotations
 from functools import cached_property
 from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from .enums import OrderStatus, Side, Action, OrderType, MarketStatus
 
 
@@ -221,9 +221,9 @@ class CandlestickResponse(BaseModel):
     """Pydantic model for Candlestick API response."""
 
     candlesticks: list[Candlestick]
-    ticker: str
+    ticker: str = Field(validation_alias="market_ticker")
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     def to_dataframe(self):
         """Convert candlesticks to a pandas DataFrame.
@@ -449,10 +449,9 @@ class RateLimitTier(BaseModel):
 
 class APILimits(BaseModel):
     """API rate limits for the authenticated user."""
-    tier: Optional[str] = None
-    limits: Optional[dict[str, RateLimitTier]] = None
-    remaining: Optional[int] = None
-    reset_at: Optional[int] = None
+    usage_tier: Optional[str] = None
+    read_limit: Optional[int] = None
+    write_limit: Optional[int] = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -465,13 +464,13 @@ class APILimits(BaseModel):
 
 class APIKey(BaseModel):
     """API key information."""
-    id: str
+    id: str = Field(validation_alias="api_key_id")
     name: Optional[str] = None
     created_time: Optional[str] = None
     last_used: Optional[str] = None
     scopes: Optional[list[str]] = None
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     def _repr_html_(self) -> str:
         from ._repr import api_key_html
@@ -480,11 +479,11 @@ class APIKey(BaseModel):
 
 class GeneratedAPIKey(BaseModel):
     """Newly generated API key with private key (only returned once)."""
-    id: str
+    id: str = Field(validation_alias="api_key_id")
     private_key: str
     name: Optional[str] = None
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
 
 # --- Series & Trade Models ---

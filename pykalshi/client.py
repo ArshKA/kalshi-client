@@ -43,7 +43,7 @@ from .rate_limiter import RateLimiterProtocol
 
 # Default configuration
 DEFAULT_API_BASE = "https://api.elections.kalshi.com/trade-api/v2"
-DEMO_API_BASE = "https://demo-api.elections.kalshi.com/trade-api/v2"
+DEMO_API_BASE = "https://demo-api.kalshi.co/trade-api/v2"
 
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
@@ -334,10 +334,14 @@ class KalshiClient:
             response, method="POST", endpoint=endpoint, request_body=data
         )
 
-    def delete(self, endpoint: str) -> dict[str, Any]:
+    def delete(self, endpoint: str, body: dict | None = None) -> dict[str, Any]:
         """Make authenticated DELETE request."""
         logger.debug("DELETE %s", endpoint)
-        response = self._request("DELETE", endpoint)
+        if body:
+            data = json.dumps(body, separators=(",", ":"))
+            response = self._request("DELETE", endpoint, data=data)
+        else:
+            response = self._request("DELETE", endpoint)
         return self._handle_response(response, method="DELETE", endpoint=endpoint)
 
     # --- Domain methods ---
@@ -558,10 +562,10 @@ class KalshiClient:
         end_ts: int,
         period: CandlestickPeriod = CandlestickPeriod.ONE_HOUR,
     ) -> dict[str, CandlestickResponse]:
-        """Batch fetch candlesticks for multiple markets.
+        """Batch fetch candlesticks for multiple markets (up to 100 tickers).
 
         Args:
-            tickers: List of market tickers.
+            tickers: List of market tickers (max 100).
             start_ts: Start timestamp (Unix seconds).
             end_ts: End timestamp (Unix seconds).
             period: Candlestick period (ONE_MINUTE, ONE_HOUR, or ONE_DAY).
@@ -569,14 +573,14 @@ class KalshiClient:
         Returns:
             Dict mapping ticker to CandlestickResponse.
         """
-        body = {
-            "tickers": tickers,
+        query = urlencode({
+            "market_tickers": ",".join(tickers),
             "start_ts": start_ts,
             "end_ts": end_ts,
             "period_interval": period.value,
-        }
-        response = self.post("/markets/candlesticks", body)
+        })
+        response = self.get(f"/markets/candlesticks?{query}")
         return {
-            ticker: CandlestickResponse.model_validate(data)
-            for ticker, data in response.get("candlesticks", {}).items()
+            item["market_ticker"]: CandlestickResponse.model_validate(item)
+            for item in response.get("markets", [])
         }

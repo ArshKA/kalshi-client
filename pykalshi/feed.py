@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # WebSocket endpoints
 DEFAULT_WS_BASE = "wss://api.elections.kalshi.com/trade-api/ws/v2"
-DEMO_WS_BASE = "wss://demo-api.elections.kalshi.com/trade-api/ws/v2"
+DEMO_WS_BASE = "wss://demo-api.kalshi.co/trade-api/ws/v2"
 _WS_SIGN_PATH = "/trade-api/ws/v2"
 
 
@@ -332,16 +332,20 @@ class Feed:
         channel: str,
         *,
         market_ticker: Optional[str] = None,
+        market_tickers: Optional[list[str]] = None,
     ) -> None:
         """Unsubscribe from a channel.
 
         Args:
             channel: Channel name.
-            market_ticker: Market to unsubscribe from (must match subscribe call).
+            market_ticker: Single market to unsubscribe from.
+            market_tickers: Multiple markets to unsubscribe from.
         """
         params: dict[str, Any] = {"channels": [channel]}
         if market_ticker is not None:
             params["market_ticker"] = market_ticker
+        if market_tickers is not None:
+            params["market_tickers"] = market_tickers
 
         # Remove from active subs
         with self._lock:
@@ -351,6 +355,7 @@ class Feed:
                 if not (
                     s.get("channels") == [channel]
                     and s.get("market_ticker") == market_ticker
+                    and s.get("market_tickers") == market_tickers
                 )
             ]
 
@@ -382,8 +387,24 @@ class Feed:
             if not self._running:
                 return
             self._running = False
+
+        # Close the WebSocket connection gracefully
+        if self._ws and self._loop and self._loop.is_running():
+            async def close_ws():
+                try:
+                    await self._ws.close()
+                except Exception:
+                    pass
+            future = asyncio.run_coroutine_threadsafe(close_ws(), self._loop)
+            try:
+                future.result(timeout=2)
+            except Exception:
+                pass
+
+        # Stop the event loop
         if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
+
         if self._thread:
             self._thread.join(timeout=5)
             self._thread = None
@@ -446,6 +467,14 @@ class Feed:
         except Exception as e:
             logger.error("Feed loop crashed: %s", e)
         finally:
+            # Cancel any pending tasks before closing
+            pending = asyncio.all_tasks(self._loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                self._loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
             self._loop.close()
             self._loop = None
 

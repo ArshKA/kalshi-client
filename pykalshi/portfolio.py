@@ -63,7 +63,7 @@ class Portfolio:
             reduce_only: If True, only reduce existing position, never increase.
             expiration_ts: Unix timestamp when order auto-cancels.
             buy_max_cost: Maximum total cost in cents. Protects against slippage.
-            self_trade_prevention: Behavior on self-cross (CANCEL_TAKER or CANCEL_MAKER).
+            self_trade_prevention: Behavior on self-cross (CANCEL_RESTING or CANCEL_INCOMING).
             order_group_id: Link to an order group for OCO/bracket strategies.
             subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
             cancel_order_on_pause: If True, cancel order if market is paused.
@@ -137,6 +137,10 @@ class Portfolio:
         yes_price: int | None = None,
         no_price: int | None = None,
         subaccount: int | None = None,
+        # Required by API but can be fetched from existing order
+        ticker: str | None = None,
+        action: Action | None = None,
+        side: Side | None = None,
     ) -> Order:
         """Amend a resting order's price or count.
 
@@ -146,6 +150,9 @@ class Portfolio:
             yes_price: New YES price in cents.
             no_price: New NO price in cents. Converted to yes_price internally.
             subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
+            ticker: Market ticker (fetched from order if not provided).
+            action: Order action (fetched from order if not provided).
+            side: Order side (fetched from order if not provided).
         """
         if yes_price is not None and no_price is not None:
             raise ValueError("Specify yes_price or no_price, not both")
@@ -153,7 +160,18 @@ class Portfolio:
         if no_price is not None:
             yes_price = 100 - no_price
 
-        body: dict = {}
+        # Fetch original order to get required fields if not provided
+        if ticker is None or action is None or side is None:
+            original = self.get_order(order_id)
+            ticker = ticker or original.ticker
+            action = action or original.action
+            side = side or original.side
+
+        body: dict = {
+            "ticker": ticker,
+            "action": action.value if isinstance(action, Action) else action,
+            "side": side.value if isinstance(side, Side) else side,
+        }
         if count is not None:
             body["count"] = count
         if yes_price is not None:
@@ -161,7 +179,7 @@ class Portfolio:
         if subaccount is not None:
             body["subaccount"] = subaccount
 
-        if not body or (subaccount is not None and len(body) == 1):
+        if "count" not in body and "yes_price" not in body:
             raise ValueError("Must specify at least one of count, yes_price, or no_price")
 
         response = self._client.post(f"/portfolio/orders/{order_id}/amend", body)
@@ -316,17 +334,17 @@ class Portfolio:
         response = self._client.post("/portfolio/orders/batched", {"orders": orders})
         return DataFrameList(Order(self._client, OrderModel.model_validate(o)) for o in response.get("orders", []))
 
-    def batch_cancel_orders(self, order_ids: list[str]) -> DataFrameList[Order]:
+    def batch_cancel_orders(self, order_ids: list[str]) -> dict:
         """Cancel multiple orders atomically.
 
         Args:
-            order_ids: List of order IDs to cancel.
+            order_ids: List of order IDs to cancel (max 20).
+
+        Returns:
+            Dict with 'orders' key containing list of cancelled order dicts.
         """
-        response = self._client.post(
-            "/portfolio/orders/batched/cancel",
-            {"order_ids": order_ids}
-        )
-        return DataFrameList(Order(self._client, OrderModel.model_validate(o)) for o in response.get("orders", []))
+        orders = [{"order_id": oid} for oid in order_ids]
+        return self._client.delete("/portfolio/orders/batched", {"orders": orders})
 
     # --- Queue Position ---
 
@@ -393,7 +411,7 @@ class Portfolio:
         """Get total value of all resting orders in cents.
 
         NOTE: This endpoint is FCM-only (institutional accounts).
-        Regular users will get a 404.
+        Regular users will get a 403 Forbidden error.
         """
         response = self._client.get("/portfolio/summary/total_resting_order_value")
         return response.get("total_resting_order_value", 0)
