@@ -38,7 +38,7 @@ class TestAPIKeysList:
         assert keys[1].id == "key-002"
         client._session.request.assert_called_with(
             "GET",
-            "https://demo-api.elections.kalshi.com/trade-api/v2/api_keys",
+            "https://demo-api.kalshi.co/trade-api/v2/api_keys",
             headers=ANY,
             timeout=ANY,
         )
@@ -140,7 +140,7 @@ class TestAPIKeyDelete:
 
         client._session.request.assert_called_with(
             "DELETE",
-            "https://demo-api.elections.kalshi.com/trade-api/v2/api_keys/key-to-delete",
+            "https://demo-api.kalshi.co/trade-api/v2/api_keys/key-to-delete",
             headers=ANY,
             timeout=ANY,
         )
@@ -163,23 +163,19 @@ class TestAPILimits:
     def test_get_limits(self, client, mock_response):
         """Test fetching API rate limits."""
         client._session.request.return_value = mock_response({
-            "tier": "standard",
-            "limits": {
-                "orders": {"max_requests": 100, "period_seconds": 60},
-                "market_data": {"max_requests": 1000, "period_seconds": 60},
-            },
-            "remaining": 95,
-            "reset_at": 1704067260,
+            "usage_tier": "standard",
+            "read_limit": 20,
+            "write_limit": 10,
         })
 
         limits = client.api_keys.get_limits()
 
-        assert limits.tier == "standard"
-        assert limits.remaining == 95
-        assert limits.reset_at == 1704067260
+        assert limits.usage_tier == "standard"
+        assert limits.read_limit == 20
+        assert limits.write_limit == 10
         client._session.request.assert_called_with(
             "GET",
-            "https://demo-api.elections.kalshi.com/trade-api/v2/account/limits",
+            "https://demo-api.kalshi.co/trade-api/v2/account/limits",
             headers=ANY,
             timeout=ANY,
         )
@@ -187,14 +183,14 @@ class TestAPILimits:
     def test_get_limits_minimal(self, client, mock_response):
         """Test limits with minimal response."""
         client._session.request.return_value = mock_response({
-            "tier": "basic",
+            "usage_tier": "basic",
         })
 
         limits = client.api_keys.get_limits()
 
-        assert limits.tier == "basic"
-        assert limits.remaining is None
-        assert limits.limits is None
+        assert limits.usage_tier == "basic"
+        assert limits.read_limit is None
+        assert limits.write_limit is None
 
 
 class TestAPIKeysCachedProperty:

@@ -44,7 +44,7 @@ def test_get_positions_workflow(client, mock_response):
     # Verify endpoint called
     client._session.request.assert_called_with(
         "GET",
-        "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/positions?limit=100",
+        "https://demo-api.kalshi.co/trade-api/v2/portfolio/positions?limit=100",
         headers=ANY,
         timeout=ANY,
     )
@@ -118,7 +118,7 @@ def test_get_fills_workflow(client, mock_response):
     # Verify endpoint called
     client._session.request.assert_called_with(
         "GET",
-        "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/fills?limit=100",
+        "https://demo-api.kalshi.co/trade-api/v2/portfolio/fills?limit=100",
         headers=ANY,
         timeout=ANY,
     )
@@ -174,7 +174,7 @@ def test_get_order_by_id(client, mock_response):
     # Verify correct endpoint called
     client._session.request.assert_called_with(
         "GET",
-        "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/orders/order-abc-123",
+        "https://demo-api.kalshi.co/trade-api/v2/portfolio/orders/order-abc-123",
         headers=ANY,
         timeout=ANY,
     )
@@ -217,7 +217,7 @@ def test_cancel_order(client, mock_response):
     # Verify DELETE request
     client._session.request.assert_called_with(
         "DELETE",
-        "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/orders/order-abc-123",
+        "https://demo-api.kalshi.co/trade-api/v2/portfolio/orders/order-abc-123",
         headers=ANY,
         timeout=ANY,
     )
@@ -358,14 +358,14 @@ def test_order_refresh(client, mock_response):
     # Verify GET to order endpoint
     client._session.request.assert_called_with(
         "GET",
-        "https://demo-api.elections.kalshi.com/trade-api/v2/portfolio/orders/order-abc-123",
+        "https://demo-api.kalshi.co/trade-api/v2/portfolio/orders/order-abc-123",
         headers=ANY,
         timeout=ANY,
     )
 
 
-def test_order_wait_until_terminal_filled(client, mock_response, mocker):
-    """Test wait_until_terminal returns when order becomes FILLED."""
+def test_order_wait_until_terminal_executed(client, mock_response, mocker):
+    """Test wait_until_terminal returns when order becomes EXECUTED."""
     from pykalshi.orders import Order
     from pykalshi.models import OrderModel
 
@@ -381,16 +381,16 @@ def test_order_wait_until_terminal_filled(client, mock_response, mocker):
     mock_monotonic = mocker.patch("pykalshi.orders.time.monotonic")
     mock_monotonic.side_effect = [0.0, 0.5, 1.0]  # start, check, check
 
-    # First refresh: still resting, second refresh: filled
+    # First refresh: still resting, second refresh: executed
     client._session.request.side_effect = [
         mock_response({"order": {"order_id": "order-abc-123", "ticker": "KXTEST", "status": "resting"}}),
-        mock_response({"order": {"order_id": "order-abc-123", "ticker": "KXTEST", "status": "filled"}}),
+        mock_response({"order": {"order_id": "order-abc-123", "ticker": "KXTEST", "status": "executed"}}),
     ]
 
     result = order.wait_until_terminal(timeout=5.0)
 
     assert result is order
-    assert order.status == OrderStatus.FILLED
+    assert order.status == OrderStatus.EXECUTED
     assert client._session.request.call_count == 2
 
 

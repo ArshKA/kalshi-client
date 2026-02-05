@@ -31,7 +31,7 @@ class TestGetSeries:
         assert series.category == "economics"
         client._session.request.assert_called_with(
             "GET",
-            "https://demo-api.elections.kalshi.com/trade-api/v2/series/INXD",
+            "https://demo-api.kalshi.co/trade-api/v2/series/INXD",
             headers=ANY,
             timeout=ANY,
         )
@@ -224,7 +224,7 @@ class TestGetTrades:
         assert trades[0].taker_side == "yes"
         client._session.request.assert_called_with(
             "GET",
-            "https://demo-api.elections.kalshi.com/trade-api/v2/markets/trades?limit=100",
+            "https://demo-api.kalshi.co/trade-api/v2/markets/trades?limit=100",
             headers=ANY,
             timeout=ANY,
         )
@@ -274,9 +274,9 @@ class TestBatchCandlesticks:
     def test_get_candlesticks_batch(self, client, mock_response):
         """Test batch candlestick retrieval."""
         client._session.request.return_value = mock_response({
-            "candlesticks": {
-                "TICK1": {
-                    "ticker": "TICK1",
+            "markets": [
+                {
+                    "market_ticker": "TICK1",
                     "candlesticks": [
                         {
                             "end_period_ts": 1704067200,
@@ -286,8 +286,8 @@ class TestBatchCandlesticks:
                         }
                     ],
                 },
-                "TICK2": {
-                    "ticker": "TICK2",
+                {
+                    "market_ticker": "TICK2",
                     "candlesticks": [
                         {
                             "end_period_ts": 1704067200,
@@ -297,7 +297,7 @@ class TestBatchCandlesticks:
                         }
                     ],
                 },
-            }
+            ]
         })
 
         result = client.get_candlesticks_batch(
@@ -313,19 +313,20 @@ class TestBatchCandlesticks:
         assert len(result["TICK1"].candlesticks) == 1
         assert result["TICK1"].candlesticks[0].volume == 100
 
-        # Verify POST body
+        # Verify GET request with query params
         call_args = client._session.request.call_args
-        assert call_args.args[0] == "POST"
-        body = json.loads(call_args.kwargs["data"])
-        assert body["tickers"] == ["TICK1", "TICK2"]
-        assert body["start_ts"] == 1704000000
-        assert body["end_ts"] == 1704100000
-        assert body["period_interval"] == 60
+        assert call_args.args[0] == "GET"
+        url = call_args.args[1]
+        assert "/markets/candlesticks" in url
+        assert "market_tickers=TICK1%2CTICK2" in url
+        assert "start_ts=1704000000" in url
+        assert "end_ts=1704100000" in url
+        assert "period_interval=60" in url
 
     def test_get_candlesticks_batch_empty(self, client, mock_response):
         """Test batch candlesticks with no results."""
         client._session.request.return_value = mock_response({
-            "candlesticks": {}
+            "markets": []
         })
 
         result = client.get_candlesticks_batch(
@@ -338,7 +339,7 @@ class TestBatchCandlesticks:
 
     def test_get_candlesticks_batch_different_periods(self, client, mock_response):
         """Test batch candlesticks with different period intervals."""
-        client._session.request.return_value = mock_response({"candlesticks": {}})
+        client._session.request.return_value = mock_response({"markets": []})
 
         # Test ONE_MINUTE
         client.get_candlesticks_batch(
@@ -347,8 +348,8 @@ class TestBatchCandlesticks:
             end_ts=2,
             period=CandlestickPeriod.ONE_MINUTE,
         )
-        body = json.loads(client._session.request.call_args.kwargs["data"])
-        assert body["period_interval"] == 1
+        url = client._session.request.call_args.args[1]
+        assert "period_interval=1" in url
 
         # Test ONE_DAY
         client.get_candlesticks_batch(
@@ -357,5 +358,5 @@ class TestBatchCandlesticks:
             end_ts=2,
             period=CandlestickPeriod.ONE_DAY,
         )
-        body = json.loads(client._session.request.call_args.kwargs["data"])
-        assert body["period_interval"] == 1440
+        url = client._session.request.call_args.args[1]
+        assert "period_interval=1440" in url
