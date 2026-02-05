@@ -334,6 +334,15 @@ class KalshiClient:
             response, method="POST", endpoint=endpoint, request_body=data
         )
 
+    def put(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
+        """Make authenticated PUT request."""
+        logger.debug("PUT %s", endpoint)
+        body = json.dumps(data, separators=(",", ":"))
+        response = self._request("PUT", endpoint, data=body)
+        return self._handle_response(
+            response, method="PUT", endpoint=endpoint, request_body=data
+        )
+
     def delete(self, endpoint: str, body: dict | None = None) -> dict[str, Any]:
         """Make authenticated DELETE request."""
         logger.debug("DELETE %s", endpoint)

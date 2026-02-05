@@ -439,107 +439,76 @@ class Portfolio:
         response = self._client.get("/portfolio/summary/total_resting_order_value")
         return response.get("total_resting_order_value", 0)
 
-    # --- Order Groups (OCO, Bracket Orders) ---
+    # --- Order Groups (Contract Rate Limiting) ---
 
     def create_order_group(
         self,
-        order_ids: list[str],
-        *,
-        max_profit: int | None = None,
-        max_loss: int | None = None,
+        contracts_limit: int,
     ) -> OrderGroupModel:
-        """Create an order group linking multiple orders.
+        """Create an order group for rate-limiting contract matches.
 
-        When one order fills, the group can trigger cancellation or
-        execution of other orders based on the limit settings.
+        Order groups limit total contracts matched across all orders in the group
+        over a rolling 15-second window. When the limit is hit, all orders in the
+        group are cancelled.
+
+        To add orders to a group, pass `order_group_id` when calling `place_order`.
 
         Args:
-            order_ids: List of order IDs to link.
-            max_profit: Trigger when profit reaches this value (cents).
-            max_loss: Trigger when loss reaches this value (cents).
+            contracts_limit: Maximum contracts that can be matched in a rolling
+                15-second window. When hit, all orders in the group are cancelled.
 
         Returns:
             Created OrderGroupModel.
         """
-        body: dict = {"order_ids": order_ids}
-        if max_profit is not None:
-            body["max_profit"] = max_profit
-        if max_loss is not None:
-            body["max_loss"] = max_loss
-
+        body: dict = {"contracts_limit": contracts_limit}
         response = self._client.post("/portfolio/order_groups/create", body)
-        return OrderGroupModel.model_validate(response.get("order_group", response))
+        return OrderGroupModel.model_validate(response)
 
     def get_order_group(self, order_group_id: str) -> OrderGroupModel:
-        """Get an order group by ID."""
-        response = self._client.get(f"/portfolio/order_groups/{order_group_id}")
-        return OrderGroupModel.model_validate(response.get("order_group", response))
+        """Get an order group by ID.
 
-    def trigger_order_group(self, order_group_id: str) -> OrderGroupModel:
-        """Manually trigger an order group."""
-        response = self._client.post(f"/portfolio/order_groups/{order_group_id}/trigger", {})
-        return OrderGroupModel.model_validate(response.get("order_group", response))
-
-    def delete_order_group(self, order_group_id: str) -> None:
-        """Delete an order group (does not cancel the orders)."""
-        self._client.delete(f"/portfolio/order_groups/{order_group_id}")
-
-    def get_order_groups(
-        self,
-        *,
-        limit: int = 100,
-        cursor: str | None = None,
-        fetch_all: bool = False,
-        **extra_params,
-    ) -> DataFrameList[OrderGroupModel]:
-        """List all order groups.
-
-        Args:
-            limit: Maximum results per page (default 100).
-            cursor: Pagination cursor for fetching next page.
-            fetch_all: If True, automatically fetch all pages.
-            **extra_params: Additional API parameters.
+        Returns order group details including list of order IDs in the group.
         """
-        params = {"limit": limit, "cursor": cursor, **extra_params}
-        data = self._client.paginated_get(
-            "/portfolio/order_groups", "order_groups", params, fetch_all
-        )
-        return DataFrameList(OrderGroupModel.model_validate(og) for og in data)
+        response = self._client.get(f"/portfolio/order_groups/{order_group_id}")
+        return OrderGroupModel.model_validate(response)
 
-    def reset_order_group(self, order_group_id: str) -> OrderGroupModel:
+    def trigger_order_group(self, order_group_id: str) -> None:
+        """Manually trigger an order group, cancelling all orders in it."""
+        self._client.put(f"/portfolio/order_groups/{order_group_id}/trigger", {})
+
+    def get_order_groups(self) -> DataFrameList[OrderGroupModel]:
+        """List all order groups."""
+        response = self._client.get("/portfolio/order_groups")
+        return DataFrameList(
+            OrderGroupModel.model_validate(og)
+            for og in response.get("order_groups", [])
+        )
+
+    def reset_order_group(self, order_group_id: str) -> None:
         """Reset matched contract counter for an order group.
 
-        Useful for reusing a bracket/OCO after partial fills.
+        Use this to re-enable the group after it has been triggered,
+        allowing orders to continue matching up to the contracts_limit again.
         """
-        response = self._client.post(
-            f"/portfolio/order_groups/{order_group_id}/reset", {}
-        )
-        return OrderGroupModel.model_validate(response.get("order_group", response))
+        self._client.put(f"/portfolio/order_groups/{order_group_id}/reset", {})
 
     def update_order_group_limit(
         self,
         order_group_id: str,
-        *,
-        max_profit: int | None = None,
-        max_loss: int | None = None,
-    ) -> OrderGroupModel:
-        """Update the contract limit for an order group.
+        contracts_limit: int,
+    ) -> None:
+        """Update the contracts limit for an order group.
+
+        If the new limit would immediately trigger the group (because current
+        matched contracts exceed it), all orders are cancelled and the group
+        is triggered.
 
         Args:
             order_group_id: ID of the order group.
-            max_profit: New max profit trigger (cents).
-            max_loss: New max loss trigger (cents).
+            contracts_limit: New maximum contracts for 15-second rolling window.
         """
-        body: dict = {}
-        if max_profit is not None:
-            body["max_profit"] = max_profit
-        if max_loss is not None:
-            body["max_loss"] = max_loss
-
-        response = self._client.post(
-            f"/portfolio/order_groups/{order_group_id}/limit", body
-        )
-        return OrderGroupModel.model_validate(response.get("order_group", response))
+        body: dict = {"contracts_limit": contracts_limit}
+        self._client.put(f"/portfolio/order_groups/{order_group_id}/limit", body)
 
     # --- Subaccounts ---
 

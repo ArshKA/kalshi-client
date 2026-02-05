@@ -563,13 +563,27 @@ class QueuePositionModel(BaseModel):
 
 
 class OrderGroupModel(BaseModel):
-    """Order group for linked order strategies (OCO, bracket)."""
-    order_group_id: str
-    status: Optional[str] = None  # "active", "triggered", "canceled"
-    orders: Optional[list[str]] = None  # Order IDs in group
-    created_time: Optional[str] = None
+    """Order group for rate-limiting contract matches.
 
-    model_config = ConfigDict(extra="ignore")
+    Order groups limit total contracts matched across all orders in the group
+    over a rolling 15-second window. When the limit is hit, all orders in the
+    group are cancelled.
+    """
+    # API returns 'id' in list/get, but 'order_group_id' in create response
+    id: Optional[str] = Field(default=None, alias="id")
+    order_group_id: Optional[str] = Field(default=None)
+    is_auto_cancel_enabled: Optional[bool] = None
+    contracts_limit: Optional[int] = None
+    contracts_limit_fp: Optional[str] = None
+    # Only returned from get_order_group (not list)
+    orders: Optional[list[str]] = None
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    @property
+    def group_id(self) -> str:
+        """Get the order group ID (handles both API response formats)."""
+        return self.id or self.order_group_id or ""
 
     def _repr_html_(self) -> str:
         from ._repr import order_group_html
