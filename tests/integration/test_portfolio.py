@@ -122,7 +122,8 @@ class TestOrderGroups:
             # Update limit
             client.portfolio.update_order_group_limit(group_id, contracts_limit=200)
 
-            # Verify update
+            # Verify update (allow time for change to propagate)
+            time.sleep(0.5)
             updated = client.portfolio.get_order_group(group_id)
             assert updated.contracts_limit == 200
 
