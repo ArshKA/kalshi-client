@@ -4,6 +4,8 @@ Kalshi API Client
 Core client class for authenticated API requests.
 """
 
+from __future__ import annotations
+
 import os
 import time
 import json
@@ -152,7 +154,7 @@ class KalshiClient:
         request_body: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Handle API response and raise custom exceptions with full context."""
-        status_code = int(response.status_code or 500)
+        status_code = response.status_code
 
         if status_code < 400:
             logger.debug("Response %s: Success", status_code)
@@ -452,7 +454,7 @@ class KalshiClient:
             params["with_nested_markets"] = "true"
         endpoint = f"/events/{event_ticker}"
         if params:
-            endpoint += "?" + "&".join(f"{k}={v}" for k, v in params.items())
+            endpoint += "?" + urlencode(params)
         response = self.get(endpoint)
         model = EventModel.model_validate(response["event"])
         return Event(self, model)
@@ -504,7 +506,7 @@ class KalshiClient:
             params["include_volume"] = "true"
         endpoint = f"/series/{series_ticker}"
         if params:
-            endpoint += "?" + "&".join(f"{k}={v}" for k, v in params.items())
+            endpoint += "?" + urlencode(params)
         response = self.get(endpoint)
         model = SeriesModel.model_validate(response["series"])
         return Series(self, model)

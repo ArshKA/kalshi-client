@@ -506,15 +506,14 @@ def api_limits_html(a: APILimits) -> str:
     """Render APILimits as HTML table."""
     rows = []
 
-    if a.tier:
-        rows.append(_row("Tier", f'<span class="pill pill-gray">{escape(a.tier)}</span>'))
+    if a.usage_tier:
+        rows.append(_row("Tier", f'<span class="pill pill-gray">{escape(a.usage_tier)}</span>'))
 
-    if a.remaining is not None:
-        rows.append(_row("Remaining", _num(a.remaining)))
+    if a.read_limit is not None:
+        rows.append(_row("Read Limit", _num(a.read_limit)))
 
-    if a.limits:
-        for name, tier in a.limits.items():
-            rows.append(_row(escape(name), f"{tier.max_requests} / {tier.period_seconds}s"))
+    if a.write_limit is not None:
+        rows.append(_row("Write Limit", _num(a.write_limit)))
 
     return _wrap(f"<table>{''.join(rows)}</table>") if rows else _wrap("<em>No limits info</em>")
 
@@ -556,15 +555,14 @@ def queue_position_html(q: QueuePositionModel) -> str:
 def order_group_html(g: OrderGroupModel) -> str:
     """Render OrderGroupModel as HTML table."""
     rows = [
-        _row("Group ID", _mono_id(g.order_group_id)),
-        _row("Status", _status_pill(g.status)),
+        _row("Group ID", _mono_id(g.id)),
     ]
+
+    if g.contracts_limit is not None:
+        rows.append(_row("Contracts Limit", _num(g.contracts_limit)))
 
     if g.orders:
         rows.append(_row("Orders", f'{len(g.orders)} linked'))
-
-    if g.created_time:
-        rows.append(_row("Created", _format_time(g.created_time)))
 
     return _wrap(f"<table>{''.join(rows)}</table>")
 

@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import ANY
-from pykalshi.enums import Action, Side, OrderStatus
+from pykalshi.enums import Action, Side, OrderStatus, PositionCountFilter
 
 
 def test_get_positions_workflow(client, mock_response):
@@ -57,7 +57,7 @@ def test_get_positions_with_filters(client, mock_response):
     )
 
     client.portfolio.get_positions(
-        ticker="KXTEST-A", event_ticker="KXTEST", count_filter="position", limit=50
+        ticker="KXTEST-A", event_ticker="KXTEST", count_filter=PositionCountFilter.POSITION, limit=50
     )
 
     # Verify all filters passed in URL

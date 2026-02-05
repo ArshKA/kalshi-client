@@ -60,8 +60,15 @@ class TimeInForce(str, Enum):
     FOK = "fill_or_kill"  # Fill or kill - fill entirely or cancel entirely
 
 
+class PositionCountFilter(str, Enum):
+    """Filter for positions with non-zero values."""
+
+    POSITION = "position"  # Non-zero contract holdings
+    TOTAL_TRADED = "total_traded"  # Non-zero trading activity
+
+
 class SelfTradePrevention(str, Enum):
     """Self-trade prevention behavior."""
 
-    CANCEL_RESTING = "taker_at_cross"  # Cancel resting order on self-cross
-    CANCEL_INCOMING = "maker"  # Cancel incoming order on self-cross
+    CANCEL_INCOMING = "taker_at_cross"  # Cancel the incoming (taker) order on self-cross
+    CANCEL_RESTING = "maker"  # Cancel the resting (maker) order on self-cross

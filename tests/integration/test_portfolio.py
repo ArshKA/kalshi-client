@@ -88,8 +88,8 @@ class TestOrderGroups:
         # Create order group with contracts limit
         group = client.portfolio.create_order_group(contracts_limit=100)
 
-        assert group.group_id is not None
-        group_id = group.group_id
+        assert group.id is not None
+        group_id = group.id
 
         try:
             # Place orders in the group
@@ -364,9 +364,11 @@ class TestOrderMutations:
         # Batch cancel
         result = client.portfolio.batch_cancel_orders(order_ids)
 
-        # Result should contain cancelled orders
-        assert isinstance(result, dict)
-        assert "orders" in result
+        # Result should be a list of Order objects
+        assert isinstance(result, list)
+        assert len(result) == 3
+        for order in result:
+            assert order.order_id in order_ids
 
     def test_get_order_by_id(self, client, market_for_orders):
         """Get a specific order by ID.
@@ -437,6 +439,56 @@ class TestOrderMutations:
         # Cleanup - batch cancel
         order_ids = [o.order_id for o in result]
         client.portfolio.batch_cancel_orders(order_ids)
+
+    def test_batch_place_orders_no_price_conversion(self, client, market_for_orders):
+        """Batch orders with no_price should be converted to yes_price."""
+        market = market_for_orders
+
+        orders_to_place = [
+            {
+                "ticker": market.ticker,
+                "action": "buy",
+                "side": "no",
+                "count": 1,
+                "type": "limit",
+                "no_price": 99,  # Should become yes_price=1
+            },
+        ]
+
+        result = client.portfolio.batch_place_orders(orders_to_place)
+
+        assert len(result) == 1
+        assert result[0].order_id is not None
+        assert result[0].yes_price == 1
+
+        # Cleanup
+        client.portfolio.batch_cancel_orders([result[0].order_id])
+
+    def test_batch_place_orders_validation(self, client, market_for_orders):
+        """Batch validation catches errors before hitting the API."""
+        market = market_for_orders
+
+        # Both yes_price and no_price
+        with pytest.raises(ValueError, match="yes_price or no_price"):
+            client.portfolio.batch_place_orders([{
+                "ticker": market.ticker,
+                "action": "buy",
+                "side": "yes",
+                "count": 1,
+                "type": "limit",
+                "yes_price": 45,
+                "no_price": 55,
+            }])
+
+        # Limit order without price
+        with pytest.raises(ValueError, match="require yes_price or no_price"):
+            client.portfolio.batch_place_orders([{
+                "ticker": market.ticker,
+                "action": "buy",
+                "side": "yes",
+                "count": 1,
+                "type": "limit",
+            }])
 
     def test_get_queue_position(self, client, market_for_orders):
         """Get queue position for a resting order."""

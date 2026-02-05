@@ -26,7 +26,7 @@ from pykalshi.models import (
     MarketModel, OrderbookResponse, BalanceModel, EventModel, PositionModel, SettlementModel,
     SubaccountBalanceModel, SubaccountTransferModel, TradeModel,
 )
-from pykalshi.enums import MarketStatus, CandlestickPeriod
+from pykalshi.enums import MarketStatus, CandlestickPeriod, PositionCountFilter
 from pykalshi.exceptions import (
     KalshiAPIError,
     AuthenticationError,
@@ -223,7 +223,7 @@ def get_portfolio_balance():
 @app.get("/api/portfolio/positions", response_model=List[PositionModel])
 def get_portfolio_positions():
     """Get all portfolio positions with non-zero balances."""
-    positions = get_client().portfolio.get_positions(count_filter="position", fetch_all=True)
+    positions = get_client().portfolio.get_positions(count_filter=PositionCountFilter.POSITION, fetch_all=True)
     return [p.model_dump() for p in positions]
 
 
@@ -239,7 +239,7 @@ def get_portfolio_summary():
     """Get portfolio summary: balance and position stats."""
     c = get_client()
     balance = c.portfolio.get_balance()
-    positions = c.portfolio.get_positions(count_filter="position", fetch_all=True)
+    positions = c.portfolio.get_positions(count_filter=PositionCountFilter.POSITION, fetch_all=True)
 
     # Calculate total position exposure
     total_exposure = sum(abs(p.market_exposure or 0) for p in positions)

@@ -34,6 +34,7 @@ from .enums import (
     CandlestickPeriod,
     TimeInForce,
     SelfTradePrevention,
+    PositionCountFilter,
 )
 from .models import (
     PositionModel,
@@ -106,6 +107,7 @@ __all__ = [
     "CandlestickPeriod",
     "TimeInForce",
     "SelfTradePrevention",
+    "PositionCountFilter",
     # Models
     "PositionModel",
     "FillModel",

@@ -1,7 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 from .orders import Order
-from .enums import Action, Side, OrderType, OrderStatus, TimeInForce, SelfTradePrevention
+from .enums import Action, Side, OrderType, OrderStatus, TimeInForce, SelfTradePrevention, PositionCountFilter
 from .dataframe import DataFrameList
 from .models import (
     OrderModel, BalanceModel, PositionModel, FillModel,
@@ -250,7 +251,7 @@ class Portfolio:
         *,
         ticker: str | None = None,
         event_ticker: str | None = None,
-        count_filter: str | None = None,
+        count_filter: PositionCountFilter | None = None,
         limit: int = 100,
         cursor: str | None = None,
         fetch_all: bool = False,
@@ -261,8 +262,7 @@ class Portfolio:
         Args:
             ticker: Filter by specific market ticker.
             event_ticker: Filter by event ticker (supports comma-separated, max 10).
-            count_filter: Filter positions with non-zero values.
-                         Options: "position", "total_traded", or both comma-separated.
+            count_filter: Filter positions with non-zero values (POSITION or TOTAL_TRADED).
             limit: Maximum positions per page (default 100, max 1000).
             cursor: Pagination cursor for fetching next page.
             fetch_all: If True, automatically fetch all pages.
@@ -272,7 +272,7 @@ class Portfolio:
             "limit": limit,
             "ticker": ticker,
             "event_ticker": event_ticker,
-            "count_filter": count_filter,
+            "count_filter": count_filter.value if count_filter is not None else None,
             "cursor": cursor,
             **extra_params,
         }
@@ -327,29 +327,44 @@ class Portfolio:
         Example:
             orders = [
                 {"ticker": "KXBTC", "action": "buy", "side": "yes", "count": 10, "type": "limit", "yes_price": 45},
-                {"ticker": "KXBTC", "action": "buy", "side": "no", "count": 10, "type": "limit", "yes_price": 55},
+                {"ticker": "KXBTC", "action": "buy", "side": "no", "count": 10, "type": "limit", "no_price": 45},
             ]
             results = portfolio.batch_place_orders(orders)
         """
-        response = self._client.post("/portfolio/orders/batched", {"orders": orders})
-        # Response has nested structure: orders[].order contains the actual order data
+        prepared = []
+        for order in orders:
+            o = dict(order)  # Don't mutate caller's dict
+            if "yes_price" in o and "no_price" in o:
+                raise ValueError("Specify yes_price or no_price, not both")
+            if o.get("type", "limit") == "limit" and "yes_price" not in o and "no_price" not in o:
+                raise ValueError("Limit orders require yes_price or no_price")
+            if "no_price" in o:
+                o["yes_price"] = 100 - o.pop("no_price")
+            prepared.append(o)
+
+        response = self._client.post("/portfolio/orders/batched", {"orders": prepared})
         result = []
         for item in response.get("orders", []):
-            order_data = item.get("order") or item  # Fall back to item if no nested 'order'
+            order_data = item.get("order") or item
             result.append(Order(self._client, OrderModel.model_validate(order_data)))
         return DataFrameList(result)
 
-    def batch_cancel_orders(self, order_ids: list[str]) -> dict:
+    def batch_cancel_orders(self, order_ids: list[str]) -> DataFrameList[Order]:
         """Cancel multiple orders atomically.
 
         Args:
             order_ids: List of order IDs to cancel (max 20).
 
         Returns:
-            Dict with 'orders' key containing list of cancelled order dicts.
+            The canceled Orders with updated status.
         """
         orders = [{"order_id": oid} for oid in order_ids]
-        return self._client.delete("/portfolio/orders/batched", {"orders": orders})
+        response = self._client.delete("/portfolio/orders/batched", {"orders": orders})
+        result = []
+        for item in response.get("orders", []):
+            order_data = item.get("order") or item
+            result.append(Order(self._client, OrderModel.model_validate(order_data)))
+        return DataFrameList(result)
 
     # --- Queue Position ---
 
@@ -380,8 +395,6 @@ class Portfolio:
             market_tickers: Filter by market tickers (optional).
             event_ticker: Filter by event ticker (optional).
         """
-        from urllib.parse import urlencode
-
         params: dict = {}
         if market_tickers:
             params["market_tickers"] = ",".join(market_tickers)
