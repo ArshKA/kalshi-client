@@ -1,7 +1,8 @@
 # API Credentials - DO NOT COMMIT
 .env
-private-key.key
+.env.*
 *.key
+*.pem
 
 # Python
 __pycache__/

@@ -1,0 +1,61 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run unit tests
+        run: uv run pytest tests/ --ignore=tests/integration -v
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    # Only run if secrets are available (not on forks)
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Write private key
+        run: echo "${{ secrets.KALSHI_DEMO_PRIVATE_KEY }}" > /tmp/demo_private_key.pem
+
+      - name: Run integration tests
+        env:
+          KALSHI_DEMO_API_KEY_ID: ${{ secrets.KALSHI_DEMO_API_KEY_ID }}
+          KALSHI_DEMO_PRIVATE_KEY_PATH: /tmp/demo_private_key.pem
+        run: uv run pytest tests/integration/ -v
