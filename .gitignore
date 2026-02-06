@@ -32,6 +32,7 @@ data/
 
 # Temp
 .pytest_cache/
+.coverage
 market.json
 
 # Claude Code

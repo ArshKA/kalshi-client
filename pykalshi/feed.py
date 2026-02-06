@@ -15,6 +15,8 @@ from typing import Any, Callable, TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
+from ._utils import normalize_ticker, normalize_tickers
+
 if TYPE_CHECKING:
     from .client import KalshiClient
 
@@ -314,9 +316,9 @@ class Feed:
         """
         params: dict[str, Any] = {"channels": [channel]}
         if market_ticker is not None:
-            params["market_ticker"] = market_ticker
+            params["market_ticker"] = market_ticker.upper()
         if market_tickers is not None:
-            params["market_tickers"] = market_tickers
+            params["market_tickers"] = normalize_tickers(market_tickers)
 
         with self._lock:
             self._active_subs.append(params)
@@ -343,9 +345,9 @@ class Feed:
         """
         params: dict[str, Any] = {"channels": [channel]}
         if market_ticker is not None:
-            params["market_ticker"] = market_ticker
+            params["market_ticker"] = market_ticker.upper()
         if market_tickers is not None:
-            params["market_tickers"] = market_tickers
+            params["market_tickers"] = normalize_tickers(market_tickers)
 
         # Remove from active subs
         with self._lock:

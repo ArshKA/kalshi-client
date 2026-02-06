@@ -41,6 +41,7 @@ from .feed import Feed
 from .exchange import Exchange
 from .api_keys import APIKeys
 from .rate_limiter import RateLimiterProtocol
+from ._utils import normalize_ticker, normalize_tickers
 
 
 # Default configuration
@@ -392,7 +393,7 @@ class KalshiClient:
 
     def get_market(self, ticker: str) -> Market:
         """Get a Market by ticker."""
-        response = self.get(f"/markets/{ticker}")
+        response = self.get(f"/markets/{ticker.upper()}")
         model = MarketModel.model_validate(response["market"])
         return Market(self, model)
 
@@ -427,9 +428,9 @@ class KalshiClient:
         params = {
             "status": status.value if status is not None else None,
             "mve_filter": mve_filter,
-            "tickers": ",".join(tickers) if tickers else None,
-            "series_ticker": series_ticker,
-            "event_ticker": event_ticker,
+            "tickers": ",".join(normalize_tickers(tickers)) if tickers else None,
+            "series_ticker": normalize_ticker(series_ticker),
+            "event_ticker": normalize_ticker(event_ticker),
             "limit": limit,
             "cursor": cursor,
             **extra_params,
@@ -452,7 +453,7 @@ class KalshiClient:
         params = {}
         if with_nested_markets:
             params["with_nested_markets"] = "true"
-        endpoint = f"/events/{event_ticker}"
+        endpoint = f"/events/{event_ticker.upper()}"
         if params:
             endpoint += "?" + urlencode(params)
         response = self.get(endpoint)
@@ -481,7 +482,7 @@ class KalshiClient:
         """
         params = {
             "limit": limit,
-            "series_ticker": series_ticker,
+            "series_ticker": normalize_ticker(series_ticker),
             "status": status.value if status is not None else None,
             "cursor": cursor,
             **extra_params,
@@ -504,7 +505,7 @@ class KalshiClient:
         params = {}
         if include_volume:
             params["include_volume"] = "true"
-        endpoint = f"/series/{series_ticker}"
+        endpoint = f"/series/{series_ticker.upper()}"
         if params:
             endpoint += "?" + urlencode(params)
         response = self.get(endpoint)
@@ -557,7 +558,7 @@ class KalshiClient:
         """
         params = {
             "limit": limit,
-            "ticker": ticker,
+            "ticker": normalize_ticker(ticker),
             "min_ts": min_ts,
             "max_ts": max_ts,
             "cursor": cursor,
@@ -585,7 +586,7 @@ class KalshiClient:
             Dict mapping ticker to CandlestickResponse.
         """
         query = urlencode({
-            "market_tickers": ",".join(tickers),
+            "market_tickers": ",".join(normalize_tickers(tickers)),
             "start_ts": start_ts,
             "end_ts": end_ts,
             "period_interval": period.value,

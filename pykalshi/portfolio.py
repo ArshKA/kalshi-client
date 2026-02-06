@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 from .orders import Order
 from .enums import Action, Side, OrderType, OrderStatus, TimeInForce, SelfTradePrevention, PositionCountFilter
 from .dataframe import DataFrameList
+from ._utils import normalize_ticker, normalize_tickers
 from .models import (
     OrderModel, BalanceModel, PositionModel, FillModel,
     SettlementModel, QueuePositionModel, OrderGroupModel,
@@ -77,7 +78,7 @@ class Portfolio:
         if no_price is not None:
             yes_price = 100 - no_price
 
-        ticker_str = ticker if isinstance(ticker, str) else ticker.ticker
+        ticker_str = ticker.upper() if isinstance(ticker, str) else ticker.ticker
 
         order_data: dict = {
             "ticker": ticker_str,
@@ -161,6 +162,8 @@ class Portfolio:
         if no_price is not None:
             yes_price = 100 - no_price
 
+        ticker = normalize_ticker(ticker)
+
         # Fetch original order to get required fields if not provided
         if ticker is None or action is None or side is None or count is None:
             original = self.get_order(order_id)
@@ -231,8 +234,8 @@ class Portfolio:
         params = {
             "limit": limit,
             "status": status.value if status is not None else None,
-            "ticker": ticker,
-            "event_ticker": event_ticker,
+            "ticker": normalize_ticker(ticker),
+            "event_ticker": normalize_ticker(event_ticker),
             "min_ts": min_ts,
             "max_ts": max_ts,
             "cursor": cursor,
@@ -271,8 +274,8 @@ class Portfolio:
         """
         params = {
             "limit": limit,
-            "ticker": ticker,
-            "event_ticker": event_ticker,
+            "ticker": normalize_ticker(ticker),
+            "event_ticker": normalize_ticker(event_ticker),
             "count_filter": count_filter.value if count_filter is not None else None,
             "cursor": cursor,
             **extra_params,
@@ -306,7 +309,7 @@ class Portfolio:
         """
         params = {
             "limit": limit,
-            "ticker": ticker,
+            "ticker": normalize_ticker(ticker),
             "order_id": order_id,
             "min_ts": min_ts,
             "max_ts": max_ts,
@@ -402,9 +405,9 @@ class Portfolio:
         """
         params: dict = {}
         if market_tickers:
-            params["market_tickers"] = ",".join(market_tickers)
+            params["market_tickers"] = ",".join(normalize_tickers(market_tickers))
         if event_ticker:
-            params["event_ticker"] = event_ticker
+            params["event_ticker"] = normalize_ticker(event_ticker)
 
         endpoint = "/portfolio/orders/queue_positions"
         if params:
@@ -440,8 +443,8 @@ class Portfolio:
         """
         params = {
             "limit": limit,
-            "ticker": ticker,
-            "event_ticker": event_ticker,
+            "ticker": normalize_ticker(ticker),
+            "event_ticker": normalize_ticker(event_ticker),
             "cursor": cursor,
             **extra_params,
         }
