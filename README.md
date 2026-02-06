@@ -54,6 +54,8 @@ KALSHI_PRIVATE_KEY_PATH=/path/to/private-key.key
 
 ## Quick Start
 
+> **Interactive demo:** [`examples/demo.ipynb`](examples/demo.ipynb) or [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1cD1FJZSeEW2qThzi7IZQKtHxu3z3eWAO?usp=sharing)
+
 ### Browse Markets
 
 ```python
