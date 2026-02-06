@@ -1,7 +1,16 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/pykalshi_logo_dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/pykalshi_logo_light.svg">
+    <img alt="pykalshi logo" src="assets/pykalshi_logo_light.svg">
+  </picture>
+</p>
+
 # PyKalshi
 
 [![PyPI version](https://img.shields.io/pypi/v/pykalshi.svg)](https://pypi.org/project/pykalshi/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pykalshi.svg)](https://pypi.org/project/pykalshi/)
+[![Tests](https://github.com/ArshKA/pykalshi/actions/workflows/test.yml/badge.svg)](https://github.com/ArshKA/pykalshi/actions/workflows/test.yml)
 [![License](https://img.shields.io/pypi/l/pykalshi.svg)](https://github.com/ArshKA/pykalshi/blob/main/LICENSE)
 
 The Python client for [Kalshi](https://kalshi.com) prediction markets. WebSocket streaming, automatic retries, pandas integration, and clean interfaces for building trading systems.
