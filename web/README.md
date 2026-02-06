@@ -68,10 +68,8 @@ The frontend uses React 18 and Tailwind CSS via CDN - no build step required.
 
 ## Purpose
 
-This dashboard serves as:
+This dashboard is a side tool to the library, and serves as:
 
 1. **Integration test** - Validates the library works end-to-end
 2. **Reference implementation** - Shows how to use the API in a real app
 3. **Development tool** - Useful for testing during library development
-
-The library (`pykalshi/`) is the primary product. This dashboard demonstrates its capabilities.

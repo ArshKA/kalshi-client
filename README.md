@@ -163,6 +163,17 @@ See the [`examples/`](examples/) directory:
 - **[stream_orderbook.py](examples/stream_orderbook.py)** - WebSocket streaming patterns
 - **[momentum_bot.py](examples/momentum_bot.py)** - Simple trading bot example
 
+## Web Dashboard
+
+A real-time web dashboard is included for browsing markets, viewing orderbooks, and monitoring your portfolio. It serves as both a development tool and a reference implementation.
+
+```bash
+pip install pykalshi[web]
+uvicorn web.backend.main:app --reload
+```
+
+See [`web/`](web/) for details.
+
 ## Why pykalshi?
 
 | | pykalshi | kalshi-python (official) |
