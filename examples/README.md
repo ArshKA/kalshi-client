@@ -46,3 +46,34 @@ KALSHI_PRIVATE_KEY_PATH=/path/to/demo-private-key.pem
 ```python
 client = KalshiClient.from_env(demo=True)
 ```
+
+## Ticker Hierarchy
+
+Kalshi organizes contracts as **Series → Events → Markets**. You can read the tickers directly from any Kalshi URL:
+
+```
+https://kalshi.com/markets/kxpresperson/pres-person/kxpresperson-28
+                        ─────────────  ──────────  ──────────────
+                        series_ticker     slug     event_ticker
+```
+
+- **Series** (`KXPRESPERSON`) — a category of related events (e.g., "Presidential Person")
+- **Event** (`KXPRESPERSON-28`) — a specific question, often with multiple markets
+- **Market** (`KXPRESPERSON-28-JOSS`) — a single yes/no contract you can trade
+
+The middle URL segment is a display slug — not used in the API. Market tickers aren't in the URL; find them through the event:
+
+```python
+# Top-down
+series = client.get_series("KXPRESPERSON")
+events = client.get_events(series_ticker="KXPRESPERSON")
+event  = client.get_event("KXPRESPERSON-28")
+markets = client.get_markets(event_ticker="KXPRESPERSON-28")
+
+# Bottom-up
+market = client.get_market("KXPRESPERSON-28-JOSS")
+event  = market.get_event()
+series = event.get_series()
+```
+
+> Tickers are case-insensitive — `"kxpresperson-28"` and `"KXPRESPERSON-28"` both work.
