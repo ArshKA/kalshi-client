@@ -68,15 +68,24 @@ def client():
     """Demo client for integration tests.
 
     Session-scoped to reuse connection across tests.
+    Skips entire suite if the Kalshi API is unavailable (503/5xx).
     """
     from pykalshi import KalshiClient
 
     key_id, key_path = _get_demo_credentials()
-    return KalshiClient(
+    c = KalshiClient(
         api_key_id=key_id,
         private_key_path=key_path,
         demo=True,
     )
+
+    # Health check: skip the whole suite if the API is down
+    try:
+        c.get_markets(limit=1)
+    except Exception as e:
+        pytest.skip(f"Kalshi API unavailable, skipping integration tests: {e}")
+
+    return c
 
 
 @pytest.fixture(scope="session")

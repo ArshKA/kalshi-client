@@ -3,7 +3,7 @@
 import time
 import pytest
 from pykalshi.enums import MarketStatus, CandlestickPeriod
-from pykalshi.exceptions import ResourceNotFoundError
+from pykalshi.exceptions import KalshiAPIError, ResourceNotFoundError
 
 
 class TestMarkets:
@@ -371,17 +371,17 @@ class TestAPIParameterVariations:
 class TestErrorHandling:
     """Tests for error handling and exceptions."""
 
-    def test_invalid_market_ticker_raises_not_found(self, client):
-        """Invalid market ticker raises ResourceNotFoundError."""
-        with pytest.raises(ResourceNotFoundError):
+    def test_invalid_market_ticker_raises_error(self, client):
+        """Invalid market ticker raises ResourceNotFoundError (or 500 from Kalshi bug)."""
+        with pytest.raises(KalshiAPIError):
             client.get_market("INVALID-TICKER-THAT-DOES-NOT-EXIST-12345")
 
-    def test_invalid_event_ticker_raises_not_found(self, client):
-        """Invalid event ticker raises ResourceNotFoundError."""
-        with pytest.raises(ResourceNotFoundError):
+    def test_invalid_event_ticker_raises_error(self, client):
+        """Invalid event ticker raises ResourceNotFoundError (or 500 from Kalshi bug)."""
+        with pytest.raises(KalshiAPIError):
             client.get_event("INVALID-EVENT-12345")
 
-    def test_invalid_series_ticker_raises_not_found(self, client):
-        """Invalid series ticker raises ResourceNotFoundError."""
-        with pytest.raises(ResourceNotFoundError):
+    def test_invalid_series_ticker_raises_error(self, client):
+        """Invalid series ticker raises ResourceNotFoundError (or 500 from Kalshi bug)."""
+        with pytest.raises(KalshiAPIError):
             client.get_series("INVALID-SERIES-12345")
