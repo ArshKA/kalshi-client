@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .markets import Market, Series
+    from .mve import MveCollection
     from .orders import Order
     from .events import Event
     from .models import (
@@ -576,6 +577,24 @@ def order_group_html(g: OrderGroupModel) -> str:
     if g.orders:
         rows.append(_row("Orders", f'{len(g.orders)} linked'))
 
+    return _wrap(f"<table>{''.join(rows)}</table>")
+
+
+def mve_collection_html(c: MveCollection) -> str:
+    """Render MveCollection as HTML table."""
+    rows = [
+        _row("Collection", f'<span class="m">{escape(c.collection_ticker)}</span>'),
+    ]
+    if c.title:
+        rows.append(_row("Title", escape(c.title)))
+    if c.series_ticker:
+        rows.append(_row("Series", _series_link(c.series_ticker)))
+    if c.data.associated_events:
+        rows.append(_row("Events", f'{len(c.data.associated_events)} associated'))
+    if c.data.size_min is not None or c.data.size_max is not None:
+        lo = c.data.size_min or "?"
+        hi = c.data.size_max or "?"
+        rows.append(_row("Legs", f'{lo}–{hi}'))
     return _wrap(f"<table>{''.join(rows)}</table>")
 
 

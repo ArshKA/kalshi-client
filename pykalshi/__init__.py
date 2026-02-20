@@ -9,10 +9,12 @@ import logging
 from .client import KalshiClient
 from .events import Event
 from .markets import Market, Series
+from .mve import MveCollection
 from .orders import Order
 from .portfolio import Portfolio
 from .exchange import Exchange
 from .api_keys import APIKeys
+from .communications import Communications
 from .feed import (
     Feed,
     TickerMessage,
@@ -59,6 +61,11 @@ from .models import (
     SubaccountBalanceModel,
     SubaccountTransferModel,
     ForecastPercentileHistory,
+    MveSelectedLeg,
+    MveCollectionModel,
+    AssociatedEventModel,
+    RfqModel,
+    QuoteModel,
 )
 from .orderbook import OrderbookManager
 from .rate_limiter import RateLimiter, NoOpRateLimiter
@@ -83,10 +90,12 @@ __all__ = [
     "Event",
     "Market",
     "Series",
+    "MveCollection",
     "Order",
     "Portfolio",
     "Exchange",
     "APIKeys",
+    "Communications",
     # Feed (WebSocket)
     "Feed",
     "TickerMessage",
@@ -128,6 +137,12 @@ __all__ = [
     "QueuePositionModel",
     "OrderGroupModel",
     "ForecastPercentileHistory",
+    # MVE & Communications Models
+    "MveSelectedLeg",
+    "MveCollectionModel",
+    "AssociatedEventModel",
+    "RfqModel",
+    "QuoteModel",
     # Utilities
     "OrderbookManager",
     "RateLimiter",

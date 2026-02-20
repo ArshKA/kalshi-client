@@ -4,6 +4,16 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from .enums import OrderStatus, Side, Action, OrderType, MarketStatus
 
 
+class MveSelectedLeg(BaseModel):
+    """A single leg in a multivariate event combo."""
+    event_ticker: str
+    market_ticker: str
+    side: str  # "yes" or "no"
+    yes_settlement_value_dollars: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class MarketModel(BaseModel):
     """Pydantic model for Market data."""
 
@@ -53,6 +63,11 @@ class MarketModel(BaseModel):
     can_close_early: bool | None = None
     rules_primary: str | None = None
     rules_secondary: str | None = None
+
+    # Multivariate event (combo) fields
+    mve_collection_ticker: str | None = None
+    mve_selected_legs: list[MveSelectedLeg] | None = None
+    is_provisional: bool | None = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -628,3 +643,68 @@ class ForecastPercentileHistory(BaseModel):
     percentiles: dict[str, list[ForecastPoint]]  # Maps percentile (e.g., "50") to history
 
     model_config = ConfigDict(extra="ignore")
+
+
+# --- Multivariate Event Collection Models ---
+
+class AssociatedEventModel(BaseModel):
+    """An event available as a leg in a multivariate event collection."""
+    ticker: str
+    is_yes_only: bool = False
+    size_min: int | None = None
+    size_max: int | None = None
+    active_quoters: list[str] | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class MveCollectionModel(BaseModel):
+    """Pydantic model for a multivariate event collection (combo container)."""
+    collection_ticker: str
+    series_ticker: str | None = None
+    title: str | None = None
+    description: str | None = None
+    open_date: str | None = None
+    close_date: str | None = None
+    associated_events: list[AssociatedEventModel] | None = None
+    is_ordered: bool = False
+    size_min: int | None = None
+    size_max: int | None = None
+    functional_description: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+# --- Communications Models (RFQ / Quotes) ---
+
+class RfqModel(BaseModel):
+    """Request for Quote on a multivariate event combo."""
+    rfq_id: str = Field(validation_alias=AliasChoices('rfq_id', 'id'))
+    market_ticker: str | None = None
+    status: str | None = None
+    contracts: int | None = None
+    target_cost_dollars: str | None = None
+    rest_remainder: bool | None = None
+    mve_collection_ticker: str | None = None
+    mve_selected_legs: list[MveSelectedLeg] | None = None
+    created_time: str | None = None
+    expiration_time: str | None = None
+    user_id: str | None = None
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+
+class QuoteModel(BaseModel):
+    """A quote in response to an RFQ."""
+    quote_id: str = Field(validation_alias=AliasChoices('quote_id', 'id'))
+    rfq_id: str | None = None
+    market_ticker: str | None = None
+    status: str | None = None
+    yes_bid: str | None = None  # FixedPointDollars
+    no_bid: str | None = None  # FixedPointDollars
+    rest_remainder: bool | None = None
+    created_time: str | None = None
+    expiration_time: str | None = None
+    user_id: str | None = None
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)

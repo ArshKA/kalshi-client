@@ -14,13 +14,15 @@ import httpx
 from ._base import _BaseKalshiClient, _RETRYABLE_STATUS_CODES
 from .events import Event
 from .markets import Market, Series
-from .models import MarketModel, EventModel, SeriesModel, TradeModel, CandlestickResponse
+from .mve import MveCollection
+from .models import MarketModel, EventModel, SeriesModel, TradeModel, CandlestickResponse, MveCollectionModel
 from .dataframe import DataFrameList
 from .portfolio import Portfolio
 from .enums import MarketStatus, CandlestickPeriod
 from .feed import Feed
 from .exchange import Exchange
 from .api_keys import APIKeys
+from .communications import Communications
 from .rate_limiter import RateLimiterProtocol
 from .exceptions import RateLimitError
 from ._utils import normalize_ticker, normalize_tickers
@@ -202,6 +204,11 @@ class KalshiClient(_BaseKalshiClient):
         """API key management and rate limits."""
         return APIKeys(self)
 
+    @cached_property
+    def communications(self) -> Communications:
+        """RFQ and quote operations for combo (multivariate event) trading."""
+        return Communications(self)
+
     def feed(self) -> Feed:
         """Create a new real-time data feed.
 
@@ -313,6 +320,61 @@ class KalshiClient(_BaseKalshiClient):
         params = {"limit": limit, "category": category, "cursor": cursor, **extra_params}
         data = self.paginated_get("/series", "series", params, fetch_all)
         return DataFrameList(Series(self, SeriesModel.model_validate(s)) for s in data)
+
+    def get_mve_collection(self, collection_ticker: str) -> MveCollection:
+        """Get a multivariate event collection by ticker."""
+        response = self.get(f"/multivariate_event_collections/{collection_ticker}")
+        model = MveCollectionModel.model_validate(response.get("collection", response))
+        return MveCollection(self, model)
+
+    def get_mve_collections(
+        self,
+        *,
+        status: str | None = None,
+        associated_event_ticker: str | None = None,
+        series_ticker: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+        fetch_all: bool = False,
+    ) -> DataFrameList[MveCollection]:
+        """List multivariate event collections."""
+        params = {
+            "limit": limit,
+            "status": status,
+            "associated_event_ticker": normalize_ticker(associated_event_ticker),
+            "series_ticker": normalize_ticker(series_ticker),
+            "cursor": cursor,
+        }
+        data = self.paginated_get(
+            "/multivariate_event_collections", "collections", params, fetch_all
+        )
+        return DataFrameList(
+            MveCollection(self, MveCollectionModel.model_validate(c)) for c in data
+        )
+
+    def get_multivariate_events(
+        self,
+        *,
+        series_ticker: str | None = None,
+        collection_ticker: str | None = None,
+        with_nested_markets: bool = False,
+        limit: int = 200,
+        cursor: str | None = None,
+        fetch_all: bool = False,
+    ) -> DataFrameList[Event]:
+        """Get multivariate (combo) events."""
+        params: dict = {"limit": limit}
+        if series_ticker:
+            params["series_ticker"] = normalize_ticker(series_ticker)
+        if collection_ticker:
+            params["collection_ticker"] = collection_ticker
+        if with_nested_markets:
+            params["with_nested_markets"] = "true"
+        if cursor:
+            params["cursor"] = cursor
+
+        data = self.paginated_get("/events/multivariate", "events", params, fetch_all)
+        return DataFrameList(Event(self, EventModel.model_validate(e)) for e in data)
 
     def get_trades(
         self,
