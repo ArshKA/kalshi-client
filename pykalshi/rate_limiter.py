@@ -7,6 +7,7 @@ to prevent 429s rather than just retrying after them.
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 from collections import deque
@@ -163,6 +164,124 @@ class NoOpRateLimiter:
     """Rate limiter that does nothing. For testing or opt-out."""
 
     def acquire(self, weight: int = 1) -> float:
+        return 0.0
+
+    def update_from_headers(
+        self, remaining: int | None, reset_at: int | None
+    ) -> None:
+        pass
+
+
+class AsyncRateLimiterProtocol(Protocol):
+    """Protocol for async rate limiters."""
+
+    async def acquire(self, weight: int = 1) -> float: ...
+
+    def update_from_headers(self, remaining: int | None, reset_at: int | None) -> None: ...
+
+
+@dataclass
+class AsyncRateLimiter:
+    """Async token bucket rate limiter with sliding window.
+
+    Same algorithm as RateLimiter but uses asyncio primitives
+    so it never blocks the event loop.
+
+    Usage:
+        limiter = AsyncRateLimiter(requests_per_second=10)
+        client = AsyncKalshiClient(..., rate_limiter=limiter)
+    """
+
+    requests_per_second: float = 10.0
+    burst: int | None = None
+    min_spacing_ms: float = 0.0
+
+    _timestamps: deque = field(default_factory=deque, repr=False)
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+    _last_request: float = field(default=0.0, repr=False)
+    _server_remaining: int | None = field(default=None, repr=False)
+    _server_reset_at: int | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.burst is None:
+            self.burst = max(1, int(self.requests_per_second * 2))
+        self._window_size = 1.0
+
+    async def acquire(self, weight: int = 1) -> float:
+        """Await until request is allowed. Returns wait time in seconds."""
+        async with self._lock:
+            now = time.monotonic()
+            waited = 0.0
+
+            if self.min_spacing_ms > 0:
+                elapsed = (now - self._last_request) * 1000
+                if elapsed < self.min_spacing_ms:
+                    sleep_time = (self.min_spacing_ms - elapsed) / 1000
+                    await asyncio.sleep(sleep_time)
+                    waited += sleep_time
+                    now = time.monotonic()
+
+            cutoff = now - self._window_size
+            while self._timestamps and self._timestamps[0] < cutoff:
+                self._timestamps.popleft()
+
+            while len(self._timestamps) >= self.burst:
+                oldest = self._timestamps[0]
+                sleep_time = oldest + self._window_size - now
+                if sleep_time > 0:
+                    await asyncio.sleep(sleep_time)
+                    waited += sleep_time
+                    now = time.monotonic()
+                cutoff = now - self._window_size
+                while self._timestamps and self._timestamps[0] < cutoff:
+                    self._timestamps.popleft()
+
+            if self._server_remaining is not None and self._server_remaining <= 1:
+                if self._server_reset_at is not None:
+                    sleep_until = self._server_reset_at - time.time()
+                    if sleep_until > 0:
+                        await asyncio.sleep(sleep_until)
+                        waited += sleep_until
+                        now = time.monotonic()
+                        self._server_remaining = None
+
+            for _ in range(weight):
+                self._timestamps.append(now)
+            self._last_request = now
+
+            return waited
+
+    def update_from_headers(
+        self, remaining: int | None, reset_at: int | None
+    ) -> None:
+        """Update state from response headers. Safe to call outside async context."""
+        if remaining is not None:
+            self._server_remaining = remaining
+        if reset_at is not None:
+            self._server_reset_at = reset_at
+
+    @property
+    def current_rate(self) -> float:
+        """Current request rate (requests in last second)."""
+        now = time.monotonic()
+        cutoff = now - self._window_size
+        while self._timestamps and self._timestamps[0] < cutoff:
+            self._timestamps.popleft()
+        return len(self._timestamps)
+
+    def reset(self) -> None:
+        """Clear all state."""
+        self._timestamps.clear()
+        self._last_request = 0.0
+        self._server_remaining = None
+        self._server_reset_at = None
+
+
+@dataclass
+class AsyncNoOpRateLimiter:
+    """Async rate limiter that does nothing. For testing or opt-out."""
+
+    async def acquire(self, weight: int = 1) -> float:
         return 0.0
 
     def update_from_headers(

@@ -7,14 +7,15 @@ A clean, modular interface for the Kalshi trading API.
 import logging
 
 from .client import KalshiClient
-from .events import Event
-from .markets import Market, Series
-from .mve import MveCollection
-from .orders import Order
-from .portfolio import Portfolio
-from .exchange import Exchange
-from .api_keys import APIKeys
-from .communications import Communications
+from .aclient import AsyncKalshiClient
+from .events import Event, AsyncEvent
+from .markets import Market, Series, AsyncMarket, AsyncSeries
+from .mve import MveCollection, AsyncMveCollection
+from .orders import Order, AsyncOrder
+from .portfolio import Portfolio, AsyncPortfolio
+from .exchange import Exchange, AsyncExchange
+from .api_keys import APIKeys, AsyncAPIKeys
+from .communications import Communications, AsyncCommunications
 from .feed import (
     Feed,
     TickerMessage,
@@ -27,6 +28,7 @@ from .feed import (
     MarketLifecycleMessage,
     OrderGroupUpdateMessage,
 )
+from .afeed import AsyncFeed
 from .enums import (
     Side,
     Action,
@@ -68,7 +70,7 @@ from .models import (
     QuoteModel,
 )
 from .orderbook import OrderbookManager
-from .rate_limiter import RateLimiter, NoOpRateLimiter
+from .rate_limiter import RateLimiter, NoOpRateLimiter, AsyncRateLimiter, AsyncNoOpRateLimiter
 from .dataframe import to_dataframe, DataFrameList
 from .exceptions import (
     KalshiError,
@@ -86,18 +88,29 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     # Client
     "KalshiClient",
+    "AsyncKalshiClient",
     # Domain objects
     "Event",
+    "AsyncEvent",
     "Market",
+    "AsyncMarket",
     "Series",
+    "AsyncSeries",
     "MveCollection",
+    "AsyncMveCollection",
     "Order",
+    "AsyncOrder",
     "Portfolio",
+    "AsyncPortfolio",
     "Exchange",
+    "AsyncExchange",
     "APIKeys",
+    "AsyncAPIKeys",
     "Communications",
+    "AsyncCommunications",
     # Feed (WebSocket)
     "Feed",
+    "AsyncFeed",
     "TickerMessage",
     "OrderbookSnapshotMessage",
     "OrderbookDeltaMessage",
@@ -147,6 +160,8 @@ __all__ = [
     "OrderbookManager",
     "RateLimiter",
     "NoOpRateLimiter",
+    "AsyncRateLimiter",
+    "AsyncNoOpRateLimiter",
     "to_dataframe",
     "DataFrameList",
     # Subaccount Models

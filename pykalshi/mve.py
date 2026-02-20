@@ -6,8 +6,8 @@ from .enums import Side
 
 if TYPE_CHECKING:
     from .client import KalshiClient
-    from .events import Event
-    from .markets import Market
+    from .events import Event, AsyncEvent
+    from .markets import Market, AsyncMarket
 
 
 class MveCollection:
@@ -121,3 +121,28 @@ class MveCollection:
     def _repr_html_(self) -> str:
         from ._repr import mve_collection_html
         return mve_collection_html(self)
+
+
+class AsyncMveCollection(MveCollection):
+    """Async variant of MveCollection."""
+
+    async def create_market(self, selected_markets: list[dict[str, str]]) -> AsyncMarket:  # type: ignore[override]
+        from .markets import AsyncMarket
+        body = {"selected_markets": selected_markets}
+        response = await self._client.post(
+            f"/multivariate_event_collections/{self.collection_ticker}", body
+        )
+        model = MarketModel.model_validate(response.get("market", response))
+        return AsyncMarket(self._client, model)
+
+    async def lookup_ticker(self, selected_markets: list[dict[str, str]]) -> dict:  # type: ignore[override]
+        body = {"selected_markets": selected_markets}
+        return await self._client.put(
+            f"/multivariate_event_collections/{self.collection_ticker}/lookup", body
+        )
+
+    async def get_events(self, *, with_nested_markets: bool = False) -> DataFrameList[AsyncEvent]:  # type: ignore[override]
+        return await self._client.get_multivariate_events(
+            collection_ticker=self.collection_ticker,
+            with_nested_markets=with_nested_markets,
+        )

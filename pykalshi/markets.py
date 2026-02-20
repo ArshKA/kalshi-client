@@ -9,7 +9,7 @@ from .enums import CandlestickPeriod, MarketStatus
 
 if TYPE_CHECKING:
     from .client import KalshiClient
-    from .events import Event
+    from .events import Event, AsyncEvent
 
 logger = logging.getLogger(__name__)
 
@@ -266,3 +266,61 @@ class Series:
     def _repr_html_(self) -> str:
         from ._repr import series_html
         return series_html(self)
+
+
+class AsyncMarket(Market):
+    """Async variant of Market. Inherits all properties and non-I/O methods."""
+
+    async def resolve_series_ticker(self) -> str | None:  # type: ignore[override]
+        if self.data.series_ticker is not None:
+            return self.data.series_ticker
+        if not self.data.event_ticker:
+            return None
+        try:
+            event_response = await self._client.get(f"/events/{self.data.event_ticker}")
+            return event_response["event"]["series_ticker"]
+        except Exception as e:
+            logger.warning("Failed to resolve series_ticker for %s: %s", self.data.ticker, e)
+            return None
+
+    async def get_orderbook(self, *, depth: int | None = None) -> OrderbookResponse:  # type: ignore[override]
+        endpoint = f"/markets/{self.data.ticker}/orderbook"
+        if depth:
+            endpoint += f"?depth={depth}"
+        response = await self._client.get(endpoint)
+        return OrderbookResponse.model_validate(response)
+
+    async def get_candlesticks(  # type: ignore[override]
+        self, start_ts: int, end_ts: int,
+        period: CandlestickPeriod = CandlestickPeriod.ONE_HOUR,
+    ) -> CandlestickResponse:
+        series = await self.resolve_series_ticker()
+        if not series:
+            raise ValueError(f"Market {self.data.ticker} does not have a series_ticker.")
+        query = f"start_ts={start_ts}&end_ts={end_ts}&period_interval={period.value}"
+        endpoint = f"/series/{series}/markets/{self.data.ticker}/candlesticks?{query}"
+        response = await self._client.get(endpoint)
+        return CandlestickResponse.model_validate(response)
+
+    async def get_trades(  # type: ignore[override]
+        self, min_ts=None, max_ts=None, limit=100, cursor=None, fetch_all=False,
+    ) -> DataFrameList[TradeModel]:
+        return await self._client.get_trades(
+            ticker=self.ticker, min_ts=min_ts, max_ts=max_ts,
+            limit=limit, cursor=cursor, fetch_all=fetch_all,
+        )
+
+    async def get_event(self) -> AsyncEvent | None:  # type: ignore[override]
+        if not self.event_ticker:
+            return None
+        return await self._client.get_event(self.event_ticker)
+
+
+class AsyncSeries(Series):
+    """Async variant of Series. Inherits all properties and non-I/O methods."""
+
+    async def get_markets(self, **kwargs) -> DataFrameList[AsyncMarket]:  # type: ignore[override]
+        return await self._client.get_markets(series_ticker=self.ticker, **kwargs)
+
+    async def get_events(self, **kwargs) -> DataFrameList[AsyncEvent]:  # type: ignore[override]
+        return await self._client.get_events(series_ticker=self.ticker, **kwargs)

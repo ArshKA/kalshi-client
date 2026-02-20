@@ -85,7 +85,29 @@ def client():
     except Exception as e:
         pytest.skip(f"Kalshi API unavailable, skipping integration tests: {e}")
 
-    return c
+    yield c
+    c.close()
+
+
+@pytest.fixture
+async def async_client():
+    """Async demo client for integration tests.
+
+    Function-scoped because httpx.AsyncClient is bound to an event loop.
+    """
+    from pykalshi import AsyncKalshiClient
+
+    key_id, key_path = _get_demo_credentials()
+    async with AsyncKalshiClient(
+        api_key_id=key_id,
+        private_key_path=key_path,
+        demo=True,
+    ) as c:
+        try:
+            await c.get_markets(limit=1)
+        except Exception as e:
+            pytest.skip(f"Kalshi API unavailable for async client: {e}")
+        yield c
 
 
 @pytest.fixture(scope="session")

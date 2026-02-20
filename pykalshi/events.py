@@ -5,7 +5,7 @@ from .dataframe import DataFrameList
 
 if TYPE_CHECKING:
     from .client import KalshiClient
-    from .markets import Market, Series
+    from .markets import Market, Series, AsyncMarket, AsyncSeries
 
 
 class Event:
@@ -95,3 +95,22 @@ class Event:
     def _repr_html_(self) -> str:
         from ._repr import event_html
         return event_html(self)
+
+
+class AsyncEvent(Event):
+    """Async variant of Event. Inherits all properties and non-I/O methods."""
+
+    async def get_markets(self) -> DataFrameList[AsyncMarket]:  # type: ignore[override]
+        return await self._client.get_markets(event_ticker=self.data.event_ticker)
+
+    async def get_series(self) -> AsyncSeries:  # type: ignore[override]
+        return await self._client.get_series(self.series_ticker)
+
+    async def get_forecast_percentile_history(  # type: ignore[override]
+        self, percentiles: list[int] | None = None,
+    ) -> ForecastPercentileHistory:
+        endpoint = f"/events/{self.event_ticker}/forecast/percentile_history"
+        if percentiles:
+            endpoint += f"?percentiles={','.join(str(p) for p in percentiles)}"
+        response = await self._client.get(endpoint)
+        return ForecastPercentileHistory.model_validate(response)

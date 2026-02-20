@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
-from .orders import Order
+from .orders import Order, AsyncOrder
 from .enums import Action, Side, OrderType, OrderStatus, TimeInForce, SelfTradePrevention, PositionCountFilter
 from .dataframe import DataFrameList
 from ._utils import normalize_ticker, normalize_tickers
@@ -70,46 +70,16 @@ class Portfolio:
             subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
             cancel_order_on_pause: If True, cancel order if market is paused.
         """
-        if yes_price is not None and no_price is not None:
-            raise ValueError("Specify yes_price or no_price, not both")
-        if yes_price is None and no_price is None and order_type == OrderType.LIMIT:
-            raise ValueError("Limit orders require yes_price or no_price")
-
-        if no_price is not None:
-            yes_price = 100 - no_price
-
-        ticker_str = ticker.upper() if isinstance(ticker, str) else ticker.ticker
-
-        order_data: dict = {
-            "ticker": ticker_str,
-            "action": action.value,
-            "side": side.value,
-            "count": count,
-            "type": order_type.value,
-        }
-        if yes_price is not None:
-            order_data["yes_price"] = yes_price
-        if client_order_id is not None:
-            order_data["client_order_id"] = client_order_id
-        if time_in_force is not None:
-            order_data["time_in_force"] = time_in_force.value
-        if post_only:
-            order_data["post_only"] = True
-        if reduce_only:
-            order_data["reduce_only"] = True
-        if expiration_ts is not None:
-            order_data["expiration_ts"] = expiration_ts
-        if buy_max_cost is not None:
-            order_data["buy_max_cost"] = buy_max_cost
-        if self_trade_prevention is not None:
-            order_data["self_trade_prevention_type"] = self_trade_prevention.value
-        if order_group_id is not None:
-            order_data["order_group_id"] = order_group_id
-        if subaccount is not None:
-            order_data["subaccount"] = subaccount
-        if cancel_order_on_pause is not None:
-            order_data["cancel_order_on_pause"] = cancel_order_on_pause
-
+        order_data = self._build_order_data(
+            ticker, action, side, count, order_type,
+            yes_price=yes_price, no_price=no_price,
+            client_order_id=client_order_id, time_in_force=time_in_force,
+            post_only=post_only, reduce_only=reduce_only,
+            expiration_ts=expiration_ts, buy_max_cost=buy_max_cost,
+            self_trade_prevention=self_trade_prevention,
+            order_group_id=order_group_id, subaccount=subaccount,
+            cancel_order_on_pause=cancel_order_on_pause,
+        )
         response = self._client.post("/portfolio/orders", order_data)
         model = OrderModel.model_validate(response["order"])
         return Order(self._client, model)
@@ -335,17 +305,7 @@ class Portfolio:
             ]
             results = portfolio.batch_place_orders(orders)
         """
-        prepared = []
-        for order in orders:
-            o = dict(order)  # Don't mutate caller's dict
-            if "yes_price" in o and "no_price" in o:
-                raise ValueError("Specify yes_price or no_price, not both")
-            if o.get("type", "limit") == "limit" and "yes_price" not in o and "no_price" not in o:
-                raise ValueError("Limit orders require yes_price or no_price")
-            if "no_price" in o:
-                o["yes_price"] = 100 - o.pop("no_price")
-            prepared.append(o)
-
+        prepared = self._build_batch_orders(orders)
         response = self._client.post("/portfolio/orders/batched", {"orders": prepared})
         result = []
         for item in response.get("orders", []):
@@ -598,4 +558,302 @@ class Portfolio:
         data = self._client.paginated_get(
             "/portfolio/subaccounts/transfers", "transfers", params, fetch_all
         )
+        return DataFrameList(SubaccountTransferModel.model_validate(t) for t in data)
+
+    # --- Shared validation helpers ---
+
+    @staticmethod
+    def _build_order_data(
+        ticker,
+        action: Action,
+        side: Side,
+        count: int,
+        order_type: OrderType = OrderType.LIMIT,
+        *,
+        yes_price=None,
+        no_price=None,
+        client_order_id=None,
+        time_in_force=None,
+        post_only=False,
+        reduce_only=False,
+        expiration_ts=None,
+        buy_max_cost=None,
+        self_trade_prevention=None,
+        order_group_id=None,
+        subaccount=None,
+        cancel_order_on_pause=None,
+    ) -> dict:
+        """Build and validate order data dict. No I/O."""
+        if yes_price is not None and no_price is not None:
+            raise ValueError("Specify yes_price or no_price, not both")
+        if yes_price is None and no_price is None and order_type == OrderType.LIMIT:
+            raise ValueError("Limit orders require yes_price or no_price")
+        if no_price is not None:
+            yes_price = 100 - no_price
+
+        ticker_str = ticker.upper() if isinstance(ticker, str) else ticker.ticker
+
+        order_data: dict = {
+            "ticker": ticker_str,
+            "action": action.value,
+            "side": side.value,
+            "count": count,
+            "type": order_type.value,
+        }
+        if yes_price is not None:
+            order_data["yes_price"] = yes_price
+        if client_order_id is not None:
+            order_data["client_order_id"] = client_order_id
+        if time_in_force is not None:
+            order_data["time_in_force"] = time_in_force.value
+        if post_only:
+            order_data["post_only"] = True
+        if reduce_only:
+            order_data["reduce_only"] = True
+        if expiration_ts is not None:
+            order_data["expiration_ts"] = expiration_ts
+        if buy_max_cost is not None:
+            order_data["buy_max_cost"] = buy_max_cost
+        if self_trade_prevention is not None:
+            order_data["self_trade_prevention_type"] = self_trade_prevention.value
+        if order_group_id is not None:
+            order_data["order_group_id"] = order_group_id
+        if subaccount is not None:
+            order_data["subaccount"] = subaccount
+        if cancel_order_on_pause is not None:
+            order_data["cancel_order_on_pause"] = cancel_order_on_pause
+        return order_data
+
+    @staticmethod
+    def _build_batch_orders(orders: list[dict]) -> list[dict]:
+        """Validate and prepare batch orders. No I/O."""
+        prepared = []
+        for order in orders:
+            o = dict(order)
+            if "yes_price" in o and "no_price" in o:
+                raise ValueError("Specify yes_price or no_price, not both")
+            if o.get("type", "limit") == "limit" and "yes_price" not in o and "no_price" not in o:
+                raise ValueError("Limit orders require yes_price or no_price")
+            if "no_price" in o:
+                o["yes_price"] = 100 - o.pop("no_price")
+            prepared.append(o)
+        return prepared
+
+
+class AsyncPortfolio(Portfolio):
+    """Async variant of Portfolio. Inherits validation helpers."""
+
+    async def get_balance(self) -> BalanceModel:  # type: ignore[override]
+        data = await self._client.get("/portfolio/balance")
+        return BalanceModel.model_validate(data)
+
+    async def place_order(  # type: ignore[override]
+        self,
+        ticker,
+        action: Action,
+        side: Side,
+        count: int,
+        order_type: OrderType = OrderType.LIMIT,
+        **kwargs,
+    ) -> AsyncOrder:
+        order_data = self._build_order_data(
+            ticker, action, side, count, order_type, **kwargs
+        )
+        response = await self._client.post("/portfolio/orders", order_data)
+        model = OrderModel.model_validate(response["order"])
+        return AsyncOrder(self._client, model)
+
+    async def cancel_order(self, order_id: str, *, subaccount: int | None = None) -> AsyncOrder:  # type: ignore[override]
+        endpoint = f"/portfolio/orders/{order_id}"
+        if subaccount is not None:
+            endpoint += f"?subaccount={subaccount}"
+        response = await self._client.delete(endpoint)
+        model = OrderModel.model_validate(response["order"])
+        return AsyncOrder(self._client, model)
+
+    async def amend_order(  # type: ignore[override]
+        self,
+        order_id: str,
+        *,
+        count: int | None = None,
+        yes_price: int | None = None,
+        no_price: int | None = None,
+        subaccount: int | None = None,
+        ticker: str | None = None,
+        action: Action | None = None,
+        side: Side | None = None,
+    ) -> AsyncOrder:
+        if yes_price is not None and no_price is not None:
+            raise ValueError("Specify yes_price or no_price, not both")
+        if no_price is not None:
+            yes_price = 100 - no_price
+        ticker = normalize_ticker(ticker)
+
+        if ticker is None or action is None or side is None or count is None:
+            original = await self.get_order(order_id)
+            ticker = ticker or original.ticker
+            action = action or original.action
+            side = side or original.side
+            if count is None:
+                count = original.remaining_count
+
+        body: dict = {
+            "ticker": ticker,
+            "action": action.value if isinstance(action, Action) else action,
+            "side": side.value if isinstance(side, Side) else side,
+            "count": count,
+        }
+        if yes_price is not None:
+            body["yes_price"] = yes_price
+        if subaccount is not None:
+            body["subaccount"] = subaccount
+        if "count" not in body and "yes_price" not in body:
+            raise ValueError("Must specify at least one of count, yes_price, or no_price")
+
+        response = await self._client.post(f"/portfolio/orders/{order_id}/amend", body)
+        model = OrderModel.model_validate(response["order"])
+        return AsyncOrder(self._client, model)
+
+    async def decrease_order(self, order_id: str, reduce_by: int) -> AsyncOrder:  # type: ignore[override]
+        response = await self._client.post(
+            f"/portfolio/orders/{order_id}/decrease", {"reduce_by": reduce_by}
+        )
+        model = OrderModel.model_validate(response["order"])
+        return AsyncOrder(self._client, model)
+
+    async def get_orders(self, *, status=None, ticker=None, event_ticker=None,  # type: ignore[override]
+                         min_ts=None, max_ts=None, limit=100, cursor=None,
+                         fetch_all=False, **extra_params) -> DataFrameList[AsyncOrder]:
+        params = {
+            "limit": limit,
+            "status": status.value if status is not None else None,
+            "ticker": normalize_ticker(ticker),
+            "event_ticker": normalize_ticker(event_ticker),
+            "min_ts": min_ts, "max_ts": max_ts, "cursor": cursor,
+            **extra_params,
+        }
+        data = await self._client.paginated_get("/portfolio/orders", "orders", params, fetch_all)
+        return DataFrameList(AsyncOrder(self._client, OrderModel.model_validate(d)) for d in data)
+
+    async def get_order(self, order_id: str) -> AsyncOrder:  # type: ignore[override]
+        response = await self._client.get(f"/portfolio/orders/{order_id}")
+        model = OrderModel.model_validate(response["order"])
+        return AsyncOrder(self._client, model)
+
+    async def get_positions(self, *, ticker=None, event_ticker=None,  # type: ignore[override]
+                            count_filter=None, limit=100, cursor=None,
+                            fetch_all=False, **extra_params) -> DataFrameList[PositionModel]:
+        params = {
+            "limit": limit,
+            "ticker": normalize_ticker(ticker),
+            "event_ticker": normalize_ticker(event_ticker),
+            "count_filter": count_filter.value if count_filter is not None else None,
+            "cursor": cursor, **extra_params,
+        }
+        data = await self._client.paginated_get("/portfolio/positions", "market_positions", params, fetch_all)
+        return DataFrameList(PositionModel.model_validate(p) for p in data)
+
+    async def get_fills(self, *, ticker=None, order_id=None,  # type: ignore[override]
+                        min_ts=None, max_ts=None, limit=100, cursor=None,
+                        fetch_all=False, **extra_params) -> DataFrameList[FillModel]:
+        params = {
+            "limit": limit, "ticker": normalize_ticker(ticker),
+            "order_id": order_id, "min_ts": min_ts, "max_ts": max_ts,
+            "cursor": cursor, **extra_params,
+        }
+        data = await self._client.paginated_get("/portfolio/fills", "fills", params, fetch_all)
+        return DataFrameList(FillModel.model_validate(f) for f in data)
+
+    async def batch_place_orders(self, orders: list[dict]) -> DataFrameList[AsyncOrder]:  # type: ignore[override]
+        prepared = self._build_batch_orders(orders)
+        response = await self._client.post("/portfolio/orders/batched", {"orders": prepared})
+        result = []
+        for item in response.get("orders", []):
+            order_data = item.get("order")
+            if order_data is None:
+                continue
+            result.append(AsyncOrder(self._client, OrderModel.model_validate(order_data)))
+        return DataFrameList(result)
+
+    async def batch_cancel_orders(self, order_ids: list[str]) -> DataFrameList[AsyncOrder]:  # type: ignore[override]
+        orders = [{"order_id": oid} for oid in order_ids]
+        response = await self._client.delete("/portfolio/orders/batched", {"orders": orders})
+        result = []
+        for item in response.get("orders", []):
+            order_data = item.get("order")
+            if order_data is None:
+                continue
+            result.append(AsyncOrder(self._client, OrderModel.model_validate(order_data)))
+        return DataFrameList(result)
+
+    async def get_queue_position(self, order_id: str) -> QueuePositionModel:  # type: ignore[override]
+        response = await self._client.get(f"/portfolio/orders/{order_id}/queue_position")
+        return QueuePositionModel(order_id=order_id, queue_position=response.get("queue_position", 0))
+
+    async def get_queue_positions(self, *, market_tickers=None, event_ticker=None) -> DataFrameList[QueuePositionModel]:  # type: ignore[override]
+        params: dict = {}
+        if market_tickers:
+            params["market_tickers"] = ",".join(normalize_tickers(market_tickers))
+        if event_ticker:
+            params["event_ticker"] = normalize_ticker(event_ticker)
+        endpoint = "/portfolio/orders/queue_positions"
+        if params:
+            endpoint = f"{endpoint}?{urlencode(params)}"
+        response = await self._client.get(endpoint)
+        return DataFrameList(QueuePositionModel.model_validate(qp) for qp in response.get("queue_positions", []))
+
+    async def get_settlements(self, *, ticker=None, event_ticker=None,  # type: ignore[override]
+                              limit=100, cursor=None, fetch_all=False,
+                              **extra_params) -> DataFrameList[SettlementModel]:
+        params = {
+            "limit": limit, "ticker": normalize_ticker(ticker),
+            "event_ticker": normalize_ticker(event_ticker),
+            "cursor": cursor, **extra_params,
+        }
+        data = await self._client.paginated_get("/portfolio/settlements", "settlements", params, fetch_all)
+        return DataFrameList(SettlementModel.model_validate(s) for s in data)
+
+    async def get_resting_order_value(self) -> int:  # type: ignore[override]
+        response = await self._client.get("/portfolio/summary/total_resting_order_value")
+        return response.get("total_resting_order_value", 0)
+
+    async def create_order_group(self, contracts_limit: int) -> OrderGroupModel:  # type: ignore[override]
+        response = await self._client.post("/portfolio/order_groups/create", {"contracts_limit": contracts_limit})
+        return OrderGroupModel.model_validate(response)
+
+    async def get_order_group(self, order_group_id: str) -> OrderGroupModel:  # type: ignore[override]
+        response = await self._client.get(f"/portfolio/order_groups/{order_group_id}")
+        response["id"] = order_group_id
+        return OrderGroupModel.model_validate(response)
+
+    async def trigger_order_group(self, order_group_id: str) -> None:  # type: ignore[override]
+        await self._client.put(f"/portfolio/order_groups/{order_group_id}/trigger", {})
+
+    async def get_order_groups(self) -> DataFrameList[OrderGroupModel]:  # type: ignore[override]
+        response = await self._client.get("/portfolio/order_groups")
+        return DataFrameList(OrderGroupModel.model_validate(og) for og in response.get("order_groups", []))
+
+    async def reset_order_group(self, order_group_id: str) -> None:  # type: ignore[override]
+        await self._client.put(f"/portfolio/order_groups/{order_group_id}/reset", {})
+
+    async def update_order_group_limit(self, order_group_id: str, contracts_limit: int) -> None:  # type: ignore[override]
+        await self._client.put(f"/portfolio/order_groups/{order_group_id}/limit", {"contracts_limit": contracts_limit})
+
+    async def create_subaccount(self) -> SubaccountModel:  # type: ignore[override]
+        response = await self._client.post("/portfolio/subaccounts", {})
+        return SubaccountModel.model_validate(response.get("subaccount", response))
+
+    async def transfer_between_subaccounts(self, from_subaccount_id, to_subaccount_id, amount) -> SubaccountTransferModel:  # type: ignore[override]
+        body = {"from_subaccount_id": from_subaccount_id, "to_subaccount_id": to_subaccount_id, "amount": amount}
+        response = await self._client.post("/portfolio/subaccounts/transfer", body)
+        return SubaccountTransferModel.model_validate(response.get("transfer", response))
+
+    async def get_subaccount_balances(self) -> DataFrameList[SubaccountBalanceModel]:  # type: ignore[override]
+        response = await self._client.get("/portfolio/subaccounts/balances")
+        return DataFrameList(SubaccountBalanceModel.model_validate(b) for b in response.get("balances", []))
+
+    async def get_subaccount_transfers(self, *, limit=100, cursor=None,  # type: ignore[override]
+                                       fetch_all=False, **extra_params) -> DataFrameList[SubaccountTransferModel]:
+        params = {"limit": limit, "cursor": cursor, **extra_params}
+        data = await self._client.paginated_get("/portfolio/subaccounts/transfers", "transfers", params, fetch_all)
         return DataFrameList(SubaccountTransferModel.model_validate(t) for t in data)

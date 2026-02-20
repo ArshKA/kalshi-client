@@ -60,3 +60,32 @@ class APIKeys:
         """Get API rate limits for this account."""
         data = self._client.get("/account/limits")
         return APILimits.model_validate(data)
+
+
+class AsyncAPIKeys(APIKeys):
+    """Async variant of APIKeys."""
+
+    async def list(self) -> list[APIKey]:  # type: ignore[override]
+        data = await self._client.get("/api_keys")
+        return [APIKey.model_validate(k) for k in data.get("api_keys", [])]
+
+    async def create(self, public_key: str, name: str | None = None) -> str:  # type: ignore[override]
+        body: dict = {"public_key": public_key}
+        if name:
+            body["name"] = name
+        data = await self._client.post("/api_keys", body)
+        return data["api_key_id"]
+
+    async def generate(self, name: str | None = None) -> GeneratedAPIKey:  # type: ignore[override]
+        body: dict = {}
+        if name:
+            body["name"] = name
+        data = await self._client.post("/api_keys/generate", body)
+        return GeneratedAPIKey.model_validate(data)
+
+    async def delete(self, key_id: str) -> None:  # type: ignore[override]
+        await self._client.delete(f"/api_keys/{key_id}")
+
+    async def get_limits(self) -> APILimits:  # type: ignore[override]
+        data = await self._client.get("/account/limits")
+        return APILimits.model_validate(data)

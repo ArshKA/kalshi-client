@@ -177,3 +177,69 @@ class Communications:
 
         data = self._client.paginated_get("/communications/quotes", "quotes", params, fetch_all)
         return DataFrameList(QuoteModel.model_validate(q) for q in data)
+
+
+class AsyncCommunications(Communications):
+    """Async variant of Communications."""
+
+    async def create_rfq(self, market_ticker, *, contracts=None,  # type: ignore[override]
+                         target_cost_dollars=None, rest_remainder=False) -> RfqModel:
+        body: dict = {"market_ticker": market_ticker.upper()}
+        if contracts is not None:
+            body["contracts"] = contracts
+        if target_cost_dollars is not None:
+            body["target_cost_dollars"] = target_cost_dollars
+        if rest_remainder:
+            body["rest_remainder"] = True
+        response = await self._client.post("/communications/rfqs", body)
+        return RfqModel.model_validate(response.get("rfq", response))
+
+    async def get_rfqs(self, *, market_ticker=None, status=None,  # type: ignore[override]
+                       mve_collection_ticker=None, limit=100, cursor=None,
+                       fetch_all=False) -> DataFrameList[RfqModel]:
+        params: dict = {"limit": limit}
+        if market_ticker:
+            params["market_ticker"] = market_ticker.upper()
+        if status:
+            params["status"] = status
+        if mve_collection_ticker:
+            params["mve_collection_ticker"] = mve_collection_ticker
+        if cursor:
+            params["cursor"] = cursor
+        data = await self._client.paginated_get("/communications/rfqs", "rfqs", params, fetch_all)
+        return DataFrameList(RfqModel.model_validate(r) for r in data)
+
+    async def get_rfq(self, rfq_id: str) -> RfqModel:  # type: ignore[override]
+        response = await self._client.get(f"/communications/rfqs/{rfq_id}")
+        return RfqModel.model_validate(response.get("rfq", response))
+
+    async def create_quote(self, rfq_id, *, yes_bid=None, no_bid=None,  # type: ignore[override]
+                           rest_remainder=False) -> QuoteModel:
+        body: dict = {"rfq_id": rfq_id}
+        if yes_bid is not None:
+            body["yes_bid"] = yes_bid
+        if no_bid is not None:
+            body["no_bid"] = no_bid
+        if rest_remainder:
+            body["rest_remainder"] = True
+        response = await self._client.post("/communications/quotes", body)
+        return QuoteModel.model_validate(response.get("quote", response))
+
+    async def get_quotes(self, *, creator_user_id=None, rfq_creator_user_id=None,  # type: ignore[override]
+                         rfq_id=None, market_ticker=None, status=None,
+                         limit=100, cursor=None, fetch_all=False) -> DataFrameList[QuoteModel]:
+        params: dict = {"limit": limit}
+        if creator_user_id:
+            params["creator_user_id"] = creator_user_id
+        if rfq_creator_user_id:
+            params["rfq_creator_user_id"] = rfq_creator_user_id
+        if rfq_id:
+            params["rfq_id"] = rfq_id
+        if market_ticker:
+            params["market_ticker"] = market_ticker.upper()
+        if status:
+            params["status"] = status
+        if cursor:
+            params["cursor"] = cursor
+        data = await self._client.paginated_get("/communications/quotes", "quotes", params, fetch_all)
+        return DataFrameList(QuoteModel.model_validate(q) for q in data)

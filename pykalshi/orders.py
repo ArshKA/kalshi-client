@@ -185,3 +185,55 @@ class Order:
     def _repr_html_(self) -> str:
         from ._repr import order_html
         return order_html(self)
+
+
+class AsyncOrder(Order):
+    """Async variant of Order. Inherits all properties and non-I/O methods."""
+
+    async def cancel(self) -> AsyncOrder:  # type: ignore[override]
+        updated = await self._client.portfolio.cancel_order(self.order_id)
+        self.data = updated.data
+        return self
+
+    async def amend(  # type: ignore[override]
+        self,
+        *,
+        count: int | None = None,
+        yes_price: int | None = None,
+        no_price: int | None = None,
+    ) -> AsyncOrder:
+        updated = await self._client.portfolio.amend_order(
+            self.order_id,
+            count=count if count is not None else self.remaining_count,
+            yes_price=yes_price,
+            no_price=no_price,
+            ticker=self.ticker,
+            action=self.action,
+            side=self.side,
+        )
+        self.data = updated.data
+        return self
+
+    async def decrease(self, reduce_by: int) -> AsyncOrder:  # type: ignore[override]
+        updated = await self._client.portfolio.decrease_order(self.order_id, reduce_by)
+        self.data = updated.data
+        return self
+
+    async def refresh(self) -> AsyncOrder:  # type: ignore[override]
+        updated = await self._client.portfolio.get_order(self.order_id)
+        self.data = updated.data
+        return self
+
+    async def wait_until_terminal(  # type: ignore[override]
+        self, timeout: float = 30.0, poll_interval: float = 0.5
+    ) -> AsyncOrder:
+        import asyncio
+        deadline = time.monotonic() + timeout
+        while self.status not in TERMINAL_STATUSES:
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Order {self.order_id} still {self.status.value} after {timeout}s"
+                )
+            await asyncio.sleep(poll_interval)
+            await self.refresh()
+        return self

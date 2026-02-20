@@ -190,6 +190,41 @@ _TYPE_TO_CHANNEL: dict[str, str] = {
 }
 
 
+def _parse_message(raw: str | bytes) -> tuple[str | None, str | None, Any, dict]:
+    """Parse a raw WebSocket message into components.
+
+    Shared by Feed and AsyncFeed. Handles JSON parsing, type extraction,
+    channel resolution, and Pydantic model validation.
+
+    Returns:
+        (msg_type, channel, parsed_payload, raw_data)
+        msg_type is None for unparseable messages.
+        channel falls back to msg_type for unknown types.
+    """
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None, None, None, {}
+
+    msg_type = data.get("type")
+    if not msg_type:
+        return None, None, None, data
+
+    payload = data.get("msg", data)
+    channel = _TYPE_TO_CHANNEL.get(msg_type, msg_type)
+
+    model_cls = _MESSAGE_MODELS.get(msg_type)
+    if model_cls and isinstance(payload, dict):
+        try:
+            parsed = model_cls.model_validate(payload)
+        except Exception:
+            parsed = payload
+    else:
+        parsed = payload
+
+    return msg_type, channel, parsed, data
+
+
 class Feed:
     """Real-time streaming data feed via WebSocket.
 
@@ -578,24 +613,19 @@ class Feed:
             self._last_message_at = receive_time
             self._message_count += 1
 
-        try:
-            data = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            logger.warning("Malformed message: %.200s", raw)
-            return
-
-        msg_type = data.get("type")
-        if not msg_type:
+        msg_type, channel, parsed, data = _parse_message(raw)
+        if msg_type is None:
+            if not data:
+                logger.warning("Malformed message: %.200s", raw)
             return
 
         # Track subscription IDs from server confirmations
         if msg_type == "subscribed":
-            cmd_id = data.get("id")
             inner = data.get("msg", {})
             sid = inner.get("sid") if isinstance(inner, dict) else None
             if sid is not None:
                 with self._lock:
-                    params = self._pending_subs.pop(cmd_id, None)
+                    params = self._pending_subs.pop(data.get("id"), None)
                     if params is not None:
                         self._sids[sid] = params
             return
@@ -608,22 +638,9 @@ class Feed:
                 with self._metrics_lock:
                     self._last_server_ts = ts
 
-        # Resolve channel for handler lookup
-        channel = _TYPE_TO_CHANNEL.get(msg_type, msg_type)
         handlers = self._handlers.get(channel)
         if not handlers:
             return
-
-        # Parse payload into typed model (payload already extracted above)
-        model_cls = _MESSAGE_MODELS.get(msg_type)
-        if model_cls:
-            try:
-                parsed = model_cls.model_validate(payload)
-            except Exception:
-                logger.debug("Failed to parse %s, passing raw dict", msg_type)
-                parsed = payload
-        else:
-            parsed = payload
 
         for handler in handlers:
             try:
