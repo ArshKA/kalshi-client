@@ -55,13 +55,14 @@ class Portfolio:
             action: BUY or SELL.
             side: YES or NO.
             count: Number of contracts.
-            order_type: LIMIT or MARKET.
+            order_type: LIMIT or MARKET. Market orders are simulated as
+                        aggressive limit orders (99c buy / 1c sell).
             yes_price: Price in cents (1-99) for the YES side.
             no_price: Price in cents (1-99) for the NO side.
                       Converted to yes_price internally (yes_price = 100 - no_price).
             client_order_id: Idempotency key. Resubmitting returns existing order.
             time_in_force: GTC (default), IOC (immediate-or-cancel), FOK (fill-or-kill).
-            post_only: If True, reject order if it would take liquidity. Essential for market makers.
+            post_only: If True, reject order if it would take liquidity.
             reduce_only: If True, only reduce existing position, never increase.
             expiration_ts: Unix timestamp when order auto-cancels.
             buy_max_cost: Maximum total cost in cents. Protects against slippage.
@@ -70,16 +71,53 @@ class Portfolio:
             subaccount: Subaccount number (0 for primary, 1-32 for subaccounts).
             cancel_order_on_pause: If True, cancel order if market is paused.
         """
-        order_data = self._build_order_data(
-            ticker, action, side, count, order_type,
-            yes_price=yes_price, no_price=no_price,
-            client_order_id=client_order_id, time_in_force=time_in_force,
-            post_only=post_only, reduce_only=reduce_only,
-            expiration_ts=expiration_ts, buy_max_cost=buy_max_cost,
-            self_trade_prevention=self_trade_prevention,
-            order_group_id=order_group_id, subaccount=subaccount,
-            cancel_order_on_pause=cancel_order_on_pause,
-        )
+        if yes_price is not None and no_price is not None:
+            raise ValueError("Specify yes_price or no_price, not both")
+
+        # Simulate market orders as aggressive limit orders
+        if order_type == OrderType.MARKET:
+            if yes_price is not None or no_price is not None:
+                raise ValueError("Market orders should not specify a price")
+            if post_only:
+                raise ValueError("post_only is incompatible with market orders")
+            # Buy at worst acceptable price, sell at worst acceptable price
+            yes_price = 99 if action == Action.BUY else 1
+        elif yes_price is None and no_price is None:
+            raise ValueError("Limit orders require yes_price or no_price")
+
+        if no_price is not None:
+            yes_price = 100 - no_price
+
+        ticker_str = ticker.upper() if isinstance(ticker, str) else ticker.ticker
+
+        order_data: dict = {
+            "ticker": ticker_str,
+            "action": action.value,
+            "side": side.value,
+            "count": count,
+            "yes_price": yes_price,
+        }
+        if client_order_id is not None:
+            order_data["client_order_id"] = client_order_id
+        if time_in_force is not None:
+            order_data["time_in_force"] = time_in_force.value
+        if post_only:
+            order_data["post_only"] = True
+        if reduce_only:
+            order_data["reduce_only"] = True
+        if expiration_ts is not None:
+            order_data["expiration_ts"] = expiration_ts
+        if buy_max_cost is not None:
+            order_data["buy_max_cost"] = buy_max_cost
+        if self_trade_prevention is not None:
+            order_data["self_trade_prevention_type"] = self_trade_prevention.value
+        if order_group_id is not None:
+            order_data["order_group_id"] = order_group_id
+        if subaccount is not None:
+            order_data["subaccount"] = subaccount
+        if cancel_order_on_pause is not None:
+            order_data["cancel_order_on_pause"] = cancel_order_on_pause
+
         response = self._client.post("/portfolio/orders", order_data)
         model = OrderModel.model_validate(response["order"])
         return Order(self._client, model)
