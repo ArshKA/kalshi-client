@@ -55,13 +55,14 @@ class Portfolio:
             action: BUY or SELL.
             side: YES or NO.
             count: Number of contracts.
-            order_type: LIMIT or MARKET.
+            order_type: LIMIT or MARKET. Market orders are simulated as
+                        aggressive limit orders (99c buy / 1c sell).
             yes_price: Price in cents (1-99) for the YES side.
             no_price: Price in cents (1-99) for the NO side.
                       Converted to yes_price internally (yes_price = 100 - no_price).
             client_order_id: Idempotency key. Resubmitting returns existing order.
             time_in_force: GTC (default), IOC (immediate-or-cancel), FOK (fill-or-kill).
-            post_only: If True, reject order if it would take liquidity. Essential for market makers.
+            post_only: If True, reject order if it would take liquidity.
             reduce_only: If True, only reduce existing position, never increase.
             expiration_ts: Unix timestamp when order auto-cancels.
             buy_max_cost: Maximum total cost in cents. Protects against slippage.
@@ -583,11 +584,25 @@ class Portfolio:
         subaccount=None,
         cancel_order_on_pause=None,
     ) -> dict:
-        """Build and validate order data dict. No I/O."""
+        """Build and validate order data dict. No I/O.
+
+        Market orders are simulated as aggressive limit orders (99c buy / 1c sell)
+        because the Kalshi API no longer supports the "market" order type.
+        """
         if yes_price is not None and no_price is not None:
             raise ValueError("Specify yes_price or no_price, not both")
-        if yes_price is None and no_price is None and order_type == OrderType.LIMIT:
+
+        # Simulate market orders as aggressive limit orders
+        if order_type == OrderType.MARKET:
+            if yes_price is not None or no_price is not None:
+                raise ValueError("Market orders should not specify a price")
+            if post_only:
+                raise ValueError("post_only is incompatible with market orders")
+            # Buy at worst acceptable price, sell at worst acceptable price
+            yes_price = 99 if action == Action.BUY else 1
+        elif yes_price is None and no_price is None:
             raise ValueError("Limit orders require yes_price or no_price")
+
         if no_price is not None:
             yes_price = 100 - no_price
 
@@ -598,10 +613,9 @@ class Portfolio:
             "action": action.value,
             "side": side.value,
             "count": count,
-            "type": order_type.value,
+            "type": "limit",
+            "yes_price": yes_price,
         }
-        if yes_price is not None:
-            order_data["yes_price"] = yes_price
         if client_order_id is not None:
             order_data["client_order_id"] = client_order_id
         if time_in_force is not None:
